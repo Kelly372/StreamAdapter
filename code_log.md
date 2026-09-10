@@ -258,3 +258,13 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 修改：`utils/next_command.py`、`inspect_realcam.py`、`prepare_realcam_windows.py`、`run_baseline.py`、`tests/test_next_command.py` 及相关使用文档。
 - 验证：56 项 CPU 测试通过、无跳过；171 个 Python 文件语法检查、git diff --check 通过。新增测试覆盖第三步成功/失败、仅索引→执行建议导出→基线检查、推理参数和含空格路径保留、失败不提示、重名避让。GPU 推理未运行。
 - 参数及结果：`output/verification_next_command_20260910-204150/`（parameters.json、tests.txt、verification.txt）。
+
+### 2026-09-10：临时诊断第三步的 CSV/NPZ 匹配失败
+
+- 新增独立 `diagnose_realcam_temp.py`。可读取 `--audit-dir` 中实际配置、NPZ 选择及 rejected.csv，优先检查失败路径；无历史结果也可传 `--camera-metadata-dir`。默认每个 split 最多 10 条，支持 `--splits test` 聚焦当前失败集合。
+- 复用生产 CSV 字段映射、子集识别、路径规范化和受限 NPZ 读取器；记录 CSV/NPZ 哈希、原始/规范化路径、字段映射、文件存在性和各相机归档的精确匹配。失败时顺序对照可用总表和另一 split 的 NPZ，提供大小写、相同场景/文件名等线索，不自动改写路径或切换生产输入。
+- 每次使用时间戳新建 output/diagnose_realcam_temp_*，避免复用已存在审计目录；保存 diagnosis.txt、report.json、parameters.json、resolved_config.yaml、status.json，以及可用的旧报告摘要。退出码 0 仅表示抽查路径匹配/文件存在/文本非空，1 表示发现问题，2 表示诊断无法完成。
+- 不解码视频、不校验相机几何、不加载模型，也不修改 CSV/NPZ/原视频；大型 NPZ 仍需完整解压一次，按文件顺序释放。当前不能宣称服务器 test=0 已解决。
+- 使用：`python diagnose_realcam_temp.py --audit-dir output/realestate10k_audit_smoke_v2 --splits test --limit 10`。如输出目录已移动或配置需调整，传 --workspace-root / --set 覆盖；若显式指定新相机目录则检查该新目录。
+- 验证：4 项临时诊断测试通过，2 个新增 Python 文件语法检查通过；覆盖正常匹配、重复运行/原文件不变、所选子集缺条目但总表精确匹配、路径前缀不同、旧拒绝路径优先、旧实际 NPZ 选择、缺失输入的失败记录。参数及测试记录：`output/verification_diagnose_temp_20260910-205932/`。
+- 脚本为临时分支工具；服务器定位并完成第三步验证后，可删除该脚本、`tests/test_diagnose_realcam_temp.py` 及 docs/realcam_csv.md 的临时说明，保留本日志作为追踪记录。生产加载器不依赖临时脚本。

@@ -56,6 +56,20 @@ CSV 没有相机列时，优先选择数据根目录下的 `RealEstate10K_<split
 
 ## 第 3A 步：预先分离 RealEstate10K NPZ
 
+遇到 `missing_camera_metadata` 时，可先运行临时只读诊断（不是第三步的替代）：
+
+```bash
+python diagnose_realcam_temp.py --audit-dir output/realestate10k_audit_smoke_v2 --splits test --limit 10
+```
+
+默认沿用上次检查的 resolved_config.yaml 和 metadata_sources.json 中实际选择的 NPZ，并优先检查 rejected.csv 的路径。没有历史输出时，可用 `--camera-metadata-dir output/realestate10k_metadata_v2` 替代 `--audit-dir`；`--config`、`--workspace-root` 和 `--set` 可覆盖配置。诊断双集合可省略 `--splits test`。
+
+每次生成唯一的 `output/diagnose_realcam_temp_<时间>/`，保存 diagnosis.txt、report.json、参数、配置和状态；输入文件不修改。匹配失败会自动对照数据根目录及所选 NPZ 目录内可用的 train/test 子集和总表；`--compare-full` 可在匹配成功时也强制对照。NPZ 顺序加载，每份完整解压到内存一次，仍需足够 RAM；不会解码视频，也不加载模型。
+
+报告区分完整路径精确匹配、仅大小写不同、场景目录＋文件名相同、仅文件名相同。后几类仅为排错线索，不替换正式读取的精确匹配。退出码 0 仅表示所抽查的路径在选定 NPZ 中存在、视频文件存在且文本非空，仍需重新执行第三步验证解码和相机几何；退出码 1 表示匹配/文件问题，2 表示诊断执行失败。分享本次 diagnosis.txt 和 report.json 即可进一步定位。
+
+服务器问题定位并验证后，可删除 `diagnose_realcam_temp.py`、`tests/test_diagnose_realcam_temp.py` 和本段临时说明；生产入口不依赖该脚本。
+
 相机按完整、规范化后的相对 `video_path` 精确匹配，不按行号或视频文件名匹配，不自动替换路径中的 train/test。匹配失败时 `rejected.csv` 同时记录该路径、输入 CSV、所选 NPZ 和实际视频文件路径。目录或字段名适配不能补齐 NPZ 中确实缺失的条目。更新输入 CSV/NPZ 或选择规则后应重新运行第 3 步，并以新清单重建第 4 步窗口索引。
 
 脚本 `extract_realestate10k.py` 可将两份总 NPZ 分离为 RealEstate10K 专用 NPZ。它只依据 `dataset_source=RealEstate10K` 筛选，不根据视频路径里的 train/test 重新划分，也不依据 CSV 删行；每条记录的全部字段、数组 dtype/形状/内容和相对顺序保持不变。
