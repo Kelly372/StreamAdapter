@@ -191,6 +191,7 @@ def inspect_dataset(config, output_dir, probe=probe_video):
     for split in ("train", "test"):
         csv_path = discover_csv(root, split, settings.get(f"{split}_csv"), subset=settings["subset"])
         relative_csv = relative_path(csv_path, root)
+        print(f"[{split}] reading CSV: {relative_csv}", flush=True)
         before_hash = sha256_file(csv_path)
         iterator = csv_rows(csv_path, encoding=settings["encoding"], delimiter=settings["delimiter"],
                             field_limit=checks["csv_field_size_limit"])
@@ -221,6 +222,8 @@ def inspect_dataset(config, output_dir, probe=probe_video):
             "timestamps_unit": settings["timestamps_unit"], "camera_convention": settings["camera_convention"],
             "intrinsics_units": settings["intrinsics_units"],
             "official_camera_npz": camera_source,
+            "video_path_base": "data_root",
+            "camera_match_key": "normalized data-root-relative video_path",
         }
         for offset, row_number, values in iterator:
             stats[split]["rows_total"] += 1
@@ -252,7 +255,11 @@ def inspect_dataset(config, output_dir, probe=probe_video):
                 if camera_index is not None:
                     external_payload = camera_index.get(canonical_path)
                     if external_payload is None:
-                        raise MetadataError("missing_camera_metadata", f"No NPZ entry matches video_path={canonical_path}")
+                        raise MetadataError("missing_camera_metadata",
+                            f"No NPZ entry matches video_path={canonical_path}; "
+                            f"CSV={relative_csv}; camera_npz={camera_source['path']}; "
+                            f"video_file={data_path(canonical_path, root)}; "
+                            "matching uses the complete data-root-relative path, preserving train/test directories")
                 result = inspect_row(row, columns, identity, root, settings, checks, probe=probe,
                                      external_payload=external_payload,
                                      camera_cache=output / "cameras" if camera_index is not None else None)

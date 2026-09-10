@@ -71,7 +71,7 @@ python run_baseline.py --set num_output_frames=128 --set "data.image_or_video_sh
 
 ## I2V 输入
 
-CSV 元数据读取和检查见 [realcam_csv.md](realcam_csv.md)；CSV 到 I2V 窗口的采样尚未接入。原版复现入口仍使用图片与同名文本：
+CSV 元数据检查见 [realcam_csv.md](realcam_csv.md)；已检查清单可通过 [第 4 步窗口采样](realcam_windows.md) 导出 baseline_i2v/。原版复现入口仍使用图片与同名文本：
 
 ```text
 public_data/RealCam-Vid/baseline_i2v/

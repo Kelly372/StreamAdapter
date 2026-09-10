@@ -8,13 +8,26 @@
 
 - 目标目录：`workspace/project/StreamAdapter`。当前本地检出的目录名可以不同。
 - 数据：`workspace/public_data/RealCam-Vid` 中的 RealEstate10K；元数据为 train/test CSV。
-- 已确认训练表 `RealEstate10K_train.csv`，字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。`dataset_source=RealEstate10K`，视频路径形如 `RealEstate10K/train/<目录>/<视频>.mp4`；相机参数来自数据根目录的 `RealCam-Vid_train.npz`。上一级目录为相似场景分组，不标记为已验证的原始视频 ID。
+- 最新确认 train/test 表直接位于数据根目录，字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均为 `dataset_source=RealEstate10K`；`data_source` 仅保留为兼容别名。视频路径形如 `RealEstate10K/train/<目录>/<视频>.mp4`，相对 `workspace/public_data/RealCam-Vid`；相机参数仍来自独立的总表或第 3A 步子集 NPZ。上一级目录为相似场景分组，不标记为已验证的原始视频 ID。
 - Wan2.2 基础组件：`workspace/pretrained_model/Wan2.2-TI2V-5B`。
 - LongLive 蒸馏权重：`workspace/pretrained_model/LongLive` 下的 `LongLive-2.0-5B`、`LongLive-2.0-5B-NVFPS-S4`、`LongLive-2.0-5B-NVFPS-S2`。
 - `NVFPS` 是用户提供的本地目录拼写，数值格式仍为 NVFP4；实际目录若为 `NVFP4`，使用配置/命令行覆盖。
 - 相对目录结构保持稳定，绝对路径允许变化；使用配置和命令行，尽量不要求手动 export。
 - 结果放在仓库 `output/<有区分性的运行名称>/`；保存最终生效参数（含默认值）、启动信息、代码版本和数据/权重路径。训练记录为 `training.txt`，推理为 `inference.txt`。
 - 原始相对配置与本次解析的绝对路径分别保存，便于迁移和审计。
+- 数据目录：
+    Workspace/public_data
+        - RealCam-Vid
+            - RealEstate10K_train.csv
+            - RealEstate10K_test.csv
+            - RealEstate10K
+                - test
+                    - sub_dir/video_name.mp4
+                - train
+                    - sub_dir/video_name.mp4
+- csv文件示例：
+dataset_source,video_path,short_caption,long_caption,align_factor,camera_scale,vtss_score
+RealEstate10K,RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4,"...","...",3.67878591096826,1.5096761946889783,0.06628306
 
 ## 已确定的首轮方案 A
 
@@ -61,7 +74,7 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - [ ] 在用户实际模型和 CUDA 环境执行基础模型推理，确认视频输出。
 - 当前统一记录入口为 `run_baseline.py`（单进程单卡）；原始 train/inference_sp 的完整运行目录生命周期将在第 12 步接入。
 
-### 3. RealCam-Vid CSV 数据接入与检查 — 已实现首轮，待真实数据验收
+### 3. RealCam-Vid CSV 数据接入与检查 — 已完成（用户确认）
 
 - [x] 接入用户确认的 CSV 列名/相对视频路径，读取 train/test 并筛选 RealEstate10K；支持列名映射。
 - [x] 按 video_path 关联官方相机 NPZ；另支持列内数组、JSON/数值 NPZ/内外参 NPY 引用。保留相机坐标及 align_factor，不提前做几何转换。
@@ -70,7 +83,7 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - [x] 保留原始视频，提供可迁移清单和按需相机读取接口；实际窗口索引与视频张量采样在第 4 步实现。
 - [x] 独立 output 子目录记录全部配置、inspection.txt、数据哈希/字段映射、运行环境、清单和状态；拒绝同名覆盖。
 - [x] 已读取本地实际 `E:/codexspace/RealCam-Vid_test.npz`，核实字段、数组形状及部分 test 条目指向原始 train 视频目录；不能从路径推断 RealCam-Vid 的集合划分。
-- [ ] 在用户真实 CSV 和视频上执行完整验收；补充可靠原视频 ID 后可进一步核实来源级泄漏。当前只承诺目录分组不跨 train/validation，重叠 test 分组被剔除并报告。
+- [x] 用户确认第 3 阶段已完成，可进入第 4 阶段；服务器真实数据运行指标以用户报告为准。本机未额外取得该报告，不新增真实性能/数量结论。原视频 ID 仍未知，当前按目录组检查，后续有可靠 ID 时可进一步核实来源级泄漏。
 - 文件：`inspect_realcam.py`、`utils/realcam_dataset.py`、`utils/realcam_inspection.py`、`configs/data/realcam_inspection.yaml`、`docs/realcam_csv.md`。
 
 #### 3A. 预先分离 RealEstate10K 相机 NPZ — 已实现
@@ -83,12 +96,17 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - [x] 修复 CSV 总表/子集表并存的选择：优先唯一 RealEstate10K 表，兼容已报告的 RealState10K 文件名；多个同级候选仍要求显式路径。
 - 分支为可选数据准备步骤，不能替代视频解码检查，不推进第 4 步窗口采样。
 
-### 4. 连续窗口采样与几何同步 — 待实现
+### 4. 连续窗口采样与几何同步 — 已实现，待服务器真实数据验收
 
-- [ ] 按 24 FPS 的时间间隔随机采样 125 帧，RGB/相机使用相同实际索引。
-- [ ] 首帧取当前窗口首帧；裁剪/缩放同步更新内参。
-- [ ] 关闭没有几何同步的增强；不跨切镜拼接，不复制/循环补监督。
-- [ ] 返回来源 ID、索引、时间戳和有效掩码。
+- [x] 基于视频解码 PTS，以 24 FPS 目标时间间隔采样 125 帧；RGB/相机使用相同实际索引，严格禁止重复，记录实际与目标时间误差。
+- [x] 首帧取当前窗口首帧；全窗口共享覆盖缩放＋随机/中心裁剪，内参按真实缩放尺寸及 half-pixel 像素中心映射同步更新，输出像素 K。
+- [x] 不启用未同步的翻转/旋转/逐帧裁剪；避开无效位姿、时间空洞、已标注/检测到的切镜，不跨这些边界拼接，不复制/循环补帧。
+- [x] 提供自动切镜检测和显式标注两种模式。自动检测可能漏检/误检，不能视为所有真实切镜均已验证；结果记录边界来源，待人工检查或可靠标注补充。
+- [x] 返回原来源/目录组、帧索引、实际/目标/相机时间戳、有效掩码、空间变换和相机约定；外参/align_factor 不提前转换。
+- [x] 建立可迁移窗口索引，按 seed/sample/epoch/draw 可复现地选取窗口；原清单、相机、视频及时间缓存变化时校验失败。
+- [x] 独立 output 目录导出首帧、GT 预览、camera.npz、sample.json、baseline_i2v/、sampling.txt 和完整参数；原基线可以直接读取导出首帧/文本。
+- [ ] 在服务器真实视频上抽查窗口、切镜与几何对齐；确认可用率后建立完整 train/validation/test 窗口索引。
+- 文件：`utils/realcam_windows.py`、`prepare_realcam_windows.py`、`configs/data/realcam_windows.yaml`、`tests/test_realcam_windows.py`、`docs/realcam_windows.md`。Torch 训练器接入仍属于第 7 步。
 
 ### 5. 相机转换与 Plücker 编码 — 待实现
 
@@ -149,7 +167,8 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 
 ### 13. 测试与文档 — 路径/配置部分先行，其余待实现
 
-- [ ] 几何、时间/空间对齐、首帧掩码测试。
+- [x] 第 4 步 RGB/相机时间索引、缩放裁剪内参、条件首帧一致性测试。
+- [ ] 第 5 步射线几何及第 10 步 latent 首帧监督掩码测试。
 - [ ] 目标块全采样链梯度、历史截断、冻结主干及仅 Adapter 更新测试。
 - [ ] 零输出/关闭 Adapter 基线一致性、训练/推理采样一致性。
 - [ ] 小样本过拟合和保存/恢复测试。
@@ -199,3 +218,33 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 已实际运行本地 test 分离：5,000 → 2,152 条，排除 2,848 条，输出 27,860,909 字节，全字段往返校验通过。结果及参数：`output/metadata_realestate10k_test_20260910-173628-455784_step03a-local-verification/`。本机未提供总 train NPZ，真实 train 分离尚未执行；train/test 双文件流程已用合成数据验证。
 - 验证：新增 5 项测试，连同已有 31 项，共 36 项通过，无跳过；覆盖原始顺序/dtype/嵌套字段保留、原文件不变、同名拒绝覆盖、空子集/缺失字段失败、CSV 同级歧义、分离结果到检查器的双 split 串联、单 split 和缺失输入记录。166 个 Python 文件语法检查、`git diff --check` 通过。
 - 验证记录：`output/verification_step03a/20260910-173931/verification.txt` 和同目录 parameters.json；同步 README、`docs/realcam_csv.md` 与数据检查默认配置。未执行 GPU 推理或训练；第 4 步保持待实现。
+
+### 2026-09-10：步骤 4；连续窗口、首帧与相机几何同步
+
+- 用户确认第 3 阶段完成后，新增 `utils/realcam_windows.py`、`prepare_realcam_windows.py`、`configs/data/realcam_windows.yaml`、`tests/test_realcam_windows.py`、`docs/realcam_windows.md`；同步 README、复现/CSV 说明、实验 A 数据接口约定和环境中的 Pillow 版本记录。
+- 从第 3 步清单扫描真实视频 PTS，按有效位姿、时间间隔和检测/标注切镜构造连续区间，枚举可行源帧起点；125 个 24 FPS 目标时间各对应一个唯一源帧，最大时间误差默认 1/48 秒。无有效窗口的短片、低 FPS 或不连续片段明确剔除，无重复、补帧或跨镜头拼接。
+- 引入 RGB/颜色直方图切镜检测和严格逐视频标注模式。检测阈值、缩略图尺寸、直方图 bins 记录在配置中；自动检测可能漏检/误检，索引与样本显式记录边界来源，服务器样本仍需人工核查。
+- 同一窗口共享一个覆盖缩放和随机/中心裁剪；按实际 sx/sy 与 half-pixel 映射更新 K，统一像素内参和整数像素中心，避免未来第 5 步射线网格约定不一致。相机外参、align_factor 保持原约定和数值，本阶段不做窗口参考系变换。
+- `RealCamWindowDataset` 提供 float32 NumPy [125,3,704,1280] 的 video、严格等于 video[0] 的 image、文本、相机、有效掩码、实际/目标时间戳和来源信息；按 seed/sample/epoch/draw 可复现，读取顺序不影响结果。训练器及多进程持久 worker 的 epoch 同步留在第 7 步。
+- 输出包含窗口索引/时间缓存、首帧 PNG、GT MP4 预览、camera.npz、sample.json、baseline_i2v/、sampling.txt 与全部配置/环境/状态。多行 caption 在基线文本中折叠为单行，原文保留，避免原 I2V 入口误解释为多个镜头。GT MP4 为有损预览，不作为像素级缓存。
+- 验证：新增 14 项 CPU 测试，连同既有 36 项共 50 项通过，无跳过；覆盖 24/30 FPS、真实 VFR、近邻唯一索引、时间空洞/无效位姿/切镜、内参投影和像素中心、首帧一致性、不同 epoch、文件变化及跨路径迁移、导出/失败记录。169 个 Python 文件语法检查、23 份 YAML 解析/重载和 `git diff --check` 通过。
+- 从仓库外 cwd 执行完整默认分辨率的合成样本流程：210 帧 30 FPS 源视频，选中起点 4，导出 125 帧、24 FPS、1280×704 GT；最大时间误差 0.016667 秒，相机平移中的帧编号与 RGB 索引一致，PNG 尺寸和首帧一致性验证通过。
+- 验证及全部参数：`output/verification_step04/20260910-184647/`（tests.txt、parameters.json、verification.txt、artifact_check.json）；实际导出：`output/windows_realestate10k_step04_fullres_synthetic_20260910-184647/`。
+- 限制：本机仍无服务器真实视频，未进行真实窗口可用率/切镜质量验收，也未运行 GPU 或旧模型测试。默认窗口约 1.26 GiB CPU 内存，建全量索引可用 --export-count 0。下一步先服务器少量窗口核查，再进入第 5 步相机参考系变换与 Plücker 编码。
+
+### 2026-09-10：按最新目录与七字段 CSV 核对、修正读取流程
+
+- 初次依据示例将 CSV 的 `data_source` 设为首选；用户随后纠正实际字段为 `dataset_source`，此项已撤回。当前 CSV 与官方 NPZ 均以 `dataset_source` 为准，`data_source` 仅为兼容别名，仍支持显式 `data.columns` 映射。
+- CSV 自动发现优先数据根目录直接包含的 RealEstate10K train/test 表，避免递归搜索到备份/导出同名表导致歧义；根目录没有子集表时才沿用递归查找，同优先级多个候选仍要求指定。显式 CSV 配置优先。
+- 视频路径继续仅相对 `workspace/public_data/RealCam-Vid` 拼接，不重复追加 RealEstate10K 或 train/test；兼容 Windows/Linux 分隔符。CSV 提供文本和非空 align_factor，NPZ 提供内外参；完整 video_path 精确关联，集合归属依据 CSV，不猜测或改写路径。
+- 检查过程显示实际 CSV；`metadata_sources.json` 记录视频路径基准和相机匹配规则；`missing_camera_metadata` 增加 CSV、所选 NPZ、实际视频路径，便于区分选错文件与标注缺失。该改动不能补齐 NPZ 中不存在的轨迹，未声称服务器此前 10 条拒绝已解决。
+- 修改：`utils/realcam_dataset.py`、`utils/realcam_inspection.py`、`configs/data/realcam_inspection.yaml`、`tests/test_realcam_dataset.py`、`tests/test_realcam_windows.py`、`docs/realcam_csv.md`。
+- 验证：52 项 CPU 测试通过、无跳过，169 个 Python 文件语法检查和 `git diff --check` 通过。新增根目录/备份 CSV 选择验证，以及七字段 CSV → 官方对象 NPZ → 真正 MP4 解码 → 迁移后的窗口加载验证；覆盖 CSV/NPZ 不同来源字段名、路径分隔符、CSV 文本与 align_factor 优先、RGB/相机索引及首帧一致性。
+- 测试使用合成视频，未验证服务器真实数据或 GPU。全部验证参数、环境、配置和结果：`output/verification_data_layout/20260910-201753-698734/`（parameters.json、tests.txt、verification.txt）。
+- 使用更新后的代码重新执行 `python inspect_realcam.py --limit 10 --tag layout-v2`；若 NPZ 在第 3A 步输出目录，继续显式传入 `--camera-metadata-dir output/<分离结果目录>`。第 4 步的 `--manifest` 指向本次新生成的检查清单；修改过输入表/NPZ 时不能复用旧窗口索引。
+
+### 2026-09-10：更正 CSV 来源字段为 dataset_source
+
+- 按用户最新纠正，CSV 和官方 NPZ 的正确字段均为 `dataset_source`。恢复该字段为自动映射首选，`data_source` 仅作兼容；同步配置注释、本文全局约定、CSV 文档及七字段窗口验证。用户已修正的 CSV 示例保持原样。
+- 验证：2 项相关集成测试通过，覆盖 CSV/NPZ 关联、缓存与视频窗口迁移、RGB/相机索引及首帧；另核对双字段存在时优先 dataset_source、仅有 data_source 时仍兼容。`git diff --check` 通过。
+- 参数及验证记录：`output/verification_dataset_source_20260910-202758/`。本次不涉及服务器真实数据或 GPU 验证。

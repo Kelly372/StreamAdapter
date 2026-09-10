@@ -286,6 +286,23 @@ class RealCamTests(unittest.TestCase):
             missing.pop(key)
         self.inputs([missing])
         self.assertEqual(self.inspect()["rejection_reasons"], {"missing_camera_metadata": 1})
+        with (self.output / "rejected.csv").open(encoding="utf-8", newline="") as handle:
+            detail = next(csv.DictReader(handle))["detail"]
+        self.assertIn("CSV=train.csv", detail)
+        self.assertIn("camera_npz=train_camera.npz", detail)
+        self.assertIn(f"video_path={missing['video_path']}", detail)
+
+    def test_root_csv_wins_over_nested_copies_and_explicit_path_wins(self):
+        root_csv = self.root / "RealEstate10K_test.csv"
+        backup = self.root / "backup" / root_csv.name
+        backup.parent.mkdir()
+        for path in (root_csv, backup, self.root / "RealCam-Vid_test.csv"):
+            path.touch()
+        self.assertEqual(discover_csv(self.root, "test", subset="RealEstate10K"), root_csv)
+        self.assertEqual(discover_csv(self.root, "test", "backup/RealEstate10K_test.csv",
+                                     subset="RealEstate10K"), backup)
+        root_csv.unlink()
+        self.assertEqual(discover_csv(self.root, "test", subset="RealEstate10K"), backup)
 
     def test_user_csv_schema_with_auto_official_npz(self):
         rows = {}

@@ -47,7 +47,7 @@ def check_inputs(config):
     if not data.exists():
         errors.append(f"data_path: {data}")
     elif config.get("i2v") and not data.is_dir():
-        errors.append("I2V data_path must be an image/prompt directory. inspect_realcam.py audits CSVs; CSV-to-I2V window loading is not implemented yet.")
+        errors.append("I2V data_path must be an image/prompt directory. Use prepare_realcam_windows.py to export baseline_i2v/ from an inspected CSV manifest.")
     elif not config.get("i2v") and data.is_file():
         if data.suffix.lower() != ".txt" or not data.read_text(encoding="utf-8").strip():
             errors.append("T2V data_path must be a nonempty prompt .txt or a caption directory.")

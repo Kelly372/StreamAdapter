@@ -57,6 +57,9 @@ data:
   metadata_format: csv
   train_csv: ${paths.data_root}/RealEstate10K_train.csv  # step 3 audit: configs/data/realcam_inspection.yaml
   test_csv: null
+  window_index: null  # step 4 output/<run>/window_index.json; trainer integration is step 7
+  camera_input_intrinsics_units: pixels  # synchronized resize/crop output
+  camera_input_pixel_centers: integer  # top-left pixel center = (0,0)
   target_fps: 24
   rgb_frames: 125
   image_or_video_shape: [1, 32, 48, 44, 80]

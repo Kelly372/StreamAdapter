@@ -6,13 +6,13 @@ seed: 0
 data:
   subset: RealEstate10K
   assume_subset: null  # set only when the CSV is known to contain this subset
-  train_csv: null  # auto: prefer RealEstate10K_<split>.csv; explicit paths are data-root-relative
+  train_csv: null  # auto: root RealEstate10K_<split>.csv first; explicit paths are data-root-relative
   test_csv: null
   train_camera_npz: null  # auto: prefer RealEstate10K_train.npz, then RealCam-Vid_train.npz
   test_camera_npz: null
   encoding: utf-8-sig
   delimiter: ','
-  columns: {}  # canonical name: actual CSV column; see docs/realcam_csv.md
+  columns: {}  # auto: subset <- dataset_source (data_source also supported), caption <- long_caption
   source_id_regex: null  # only if original-video ID is encoded in the video path
   group_by: source_or_directory  # no source ID: use confirmed parent directory as a group, not as an original-video ID
   validation_fraction: 0.05  # stable group hash split from train; test is preserved

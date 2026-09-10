@@ -1,8 +1,19 @@
 # RealEstate10K CSV 接入与检查（第 3 阶段）
 
-本阶段读取 RealCam-Vid 的 train/test CSV，筛选 RealEstate10K，检查视频与相机标注，生成可迁移的样本清单。原视频和元数据不改写；不加载 LongLive、不开启训练。第 4 阶段再实现 24 FPS / 125 RGB 连续窗口、首帧提取和几何同步。
+本阶段读取 RealCam-Vid 的 train/test CSV，筛选 RealEstate10K，检查视频与相机标注，生成可迁移的样本清单。原视频和元数据不改写；不加载 LongLive、不开启训练。第 4 阶段通过 `prepare_realcam_windows.py` 实现 24 FPS / 125 RGB 连续窗口、首帧提取和几何同步。
 
-用户已确认训练表为 `RealEstate10K_train.csv`，包含 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`；视频路径形如 `RealEstate10K/train/<目录>/<视频>.mp4`。服务器相机文件位于数据根目录下 `RealCam-Vid_train.npz`。上一级目录只按用户描述作为相似场景分组，不能视为已验证的原始视频 ID。
+用户最新确认 train/test 表直接位于 `workspace/public_data/RealCam-Vid`，分别为 `RealEstate10K_train.csv`、`RealEstate10K_test.csv`，包含 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均使用 `dataset_source=RealEstate10K`；读取器仅将 `data_source` 保留为兼容别名。上一级视频目录只作为相似场景分组，不能视为已验证的原始视频 ID。
+
+```text
+workspace/public_data/RealCam-Vid/
+  RealEstate10K_train.csv
+  RealEstate10K_test.csv
+  RealEstate10K/
+    train/<sub_dir>/<video_name>.mp4
+    test/<sub_dir>/<video_name>.mp4
+```
+
+例如 `video_path=RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4`，只拼接一次数据根目录，得到 `workspace/public_data/RealCam-Vid/RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4`。文本读取同一行的 `long_caption`，CSV 中非空 `align_factor` 优先于 NPZ。相机内外参仍来自独立 NPZ；上述七列和 MP4 不包含可直接读取的相机轨迹。
 
 本地示例 `E:/codexspace/RealCam-Vid_test.npz` 已实际读取：5,000 条记录，其中 RealEstate10K 为 2,152 条；无原始视频 ID 字段。部分 test 元数据指向 `RealEstate10K/train/...`，因此**集合划分以输入 CSV 为准，不由视频路径中的 train/test 决定**。真实 CSV 和视频尚未在本机验收。
 
@@ -35,11 +46,13 @@ python inspect_realcam.py --set data.train_camera_npz=RealCam-Vid_train.npz --se
 python inspect_realcam.py --probe-mode metadata --limit 10 --tag metadata-smoke
 ```
 
-默认 train/test CSV 自动发现，优先选择 `RealEstate10K_<split>.csv`，也识别用户目录中的 `RealState10K_<split>.csv` 拼写；总表与子集表同时存在时选择子集表。存在多个子集表（包括两种拼写同时存在），仍要求显式设置 `data.train_csv/test_csv`。没有子集表时，接受文件名中带独立 train/test 标记的唯一 CSV；显式路径始终优先。
+默认 train/test CSV 自动发现，优先选择数据根目录直接包含的 `RealEstate10K_<split>.csv`，也兼容 `RealState10K_<split>.csv` 拼写。根目录子集表存在时不递归搜索，避免备份或导出的同名 CSV 干扰。根目录没有子集表时才递归查找，仍优先子集表，再接受文件名中带独立 train/test 标记的唯一 CSV。同一优先级多个候选（包括两种拼写同时存在）仍要求显式设置 `data.train_csv/test_csv`；显式路径始终优先。
 
 CSV 没有相机列时，优先选择数据根目录下的 `RealEstate10K_<split>.npz`，缺失时使用 `RealCam-Vid_<split>.npz`；显式配置优先于自动发现。两者都缺失时明确报错，不生成虚拟相机。非标准布局用 `--workspace-root` 覆盖；`paths.data_root` 相对 workspace，显式 CSV/NPZ、视频和相机引用均相对数据根目录。视频、CSV 和逐样本相机文件须位于数据根目录内。官方整表 NPZ 也允许显式指定根目录外的绝对路径（如本地示例）；输出缓存可迁移，服务器配置仍应使用相对路径。视频路径同时接受 `/` 和 `\`。
 
 ## 第 3A 步：预先分离 RealEstate10K NPZ
+
+相机按完整、规范化后的相对 `video_path` 精确匹配，不按行号或视频文件名匹配，不自动替换路径中的 train/test。匹配失败时 `rejected.csv` 同时记录该路径、输入 CSV、所选 NPZ 和实际视频文件路径。目录或字段名适配不能补齐 NPZ 中确实缺失的条目。更新输入 CSV/NPZ 或选择规则后应重新运行第 3 步，并以新清单重建第 4 步窗口索引。
 
 脚本 `extract_realestate10k.py` 可将两份总 NPZ 分离为 RealEstate10K 专用 NPZ。它只依据 `dataset_source=RealEstate10K` 筛选，不根据视频路径里的 train/test 重新划分，也不依据 CSV 删行；每条记录的全部字段、数组 dtype/形状/内容和相对顺序保持不变。
 
@@ -88,7 +101,7 @@ python extract_realestate10k.py --splits test --test-npz "E:/codexspace/RealCam-
 | --- | --- | --- |
 | video_path | video_path / video | 必需，本地视频路径 |
 | caption | long_caption / caption | 默认必需；可映射至 short_caption |
-| subset | dataset_source / subset / dataset / data_source | 筛选 RealEstate10K；缺失时识别视频路径中的完整子集目录名 |
+| subset | dataset_source / data_source / subset / dataset | 筛选 RealEstate10K；缺失时识别视频路径中的完整子集目录名；多列存在时按此顺序，或用 data.columns.subset 显式指定 |
 | source_id | source_video_id / source_id / original_video_id / youtube_id | 可选原始视频来源 ID；缺失时保留空值，按目录分组并记录检查局限；不能用 clip ID 代替 |
 | clip_id | clip_id / video_id | 可选；缺失时取视频文件名，仅作记录 |
 | split | split | 可选；若存在必须与输入 train/test CSV 一致 |
@@ -150,6 +163,6 @@ sample = dataset[0]
 # 数组为 NumPy；索引 CSV 中其他标量字段目前保留为字符串。
 ```
 
-这还是元数据接口，不返回视频张量，不直接改变 `run_baseline.py` 的输入格式。原版 I2V 复现仍使用图片和同名文本目录。CSV 到同步窗口/首帧的连接属于第 4 阶段。
+以上仍是第 3 步元数据接口；视频窗口和首帧由已实现的 [第 4 步窗口加载器](realcam_windows.md) 读取/导出。原版 `run_baseline.py` 继续使用图片和同名文本目录，可直接读取第 4 步输出的 baseline_i2v/。
 
 测试：`python -m unittest discover -s tests -p test_realcam_dataset.py -v`。包含真实合成 MP4 解码，需 PyAV；未安装时该项明确跳过。

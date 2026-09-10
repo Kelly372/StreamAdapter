@@ -22,7 +22,8 @@ ALIASES = {
     "video_path": ("video_path", "video"),
     "caption": ("long_caption", "caption"),
     "short_caption": ("short_caption",),
-    "subset": ("dataset_source", "subset", "dataset", "data_source"),
+    # Both confirmed CSVs and official NPZ entries use dataset_source.
+    "subset": ("dataset_source", "data_source", "subset", "dataset"),
     "source_id": ("source_video_id", "source_id", "original_video_id", "youtube_id"),
     "clip_id": ("clip_id", "video_id"),
     "split": ("split",),
@@ -74,12 +75,18 @@ def discover_csv(root, split, explicit=None, *, subset=None):
         if not path.is_file():
             raise FileNotFoundError(f"{split} CSV does not exist: {path}")
         return data_path(path, root)
-    matches = sorted(path for path in Path(root).rglob("*.csv")
-                     if split in re.split(r"[^a-z0-9]+", path.stem.lower()))
+    root = Path(root)
+    names = set()
     if subset:
         names = {f"{subset}_{split}".lower()}
         if subset.lower() == "realestate10k":
             names.add(f"realstate10k_{split}")  # filename spelling reported by the user
+    # The confirmed layout places subset CSVs directly under RealCam-Vid.
+    # Do not let nested backup/export CSVs shadow these files or cause ambiguity.
+    matches = sorted(path for path in root.glob("*.csv") if path.stem.lower() in names)
+    if not matches:
+        matches = sorted(path for path in root.rglob("*.csv")
+                         if split in re.split(r"[^a-z0-9]+", path.stem.lower()))
         dedicated = [path for path in matches if path.stem.lower() in names]
         if dedicated:
             matches = dedicated
