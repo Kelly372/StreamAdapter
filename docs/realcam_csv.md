@@ -21,6 +21,10 @@ workspace/public_data/RealCam-Vid/
 
 ## 运行
 
+第 3 步成功（退出码 0）后，在常规摘要末尾打印第 4 步命令，自动引用本次 `output/<run_name>/train.csv`，默认 `--limit 10 --export-count 2`。例如 `realestate10k_audit_smoke_v2` 会建议输出到 `realestate10k_windows_smoke_v2`；已有同名目录时自动追加编号。非默认数据根目录、workspace、seed、目标帧数/FPS 会传给下一步。失败时不打印继续命令。
+
+提示命令应在仓库目录执行，也保存在本次结果的 `next_command.txt` 和 `next_command.json`（参数数组、工作目录和 shell）。命令仅供复制，不自动执行。全量检查成功后仍先建议抽查少量窗口，确认后可另建全量索引。
+
 在项目已有环境运行即可；此入口仅依赖 NumPy、OmegaConf、PyAV，不需要 Torch/GPU。独立 CPU 环境可安装：
 
 ```bash

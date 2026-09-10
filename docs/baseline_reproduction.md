@@ -43,6 +43,7 @@ python run_baseline.py --tag first-i2v
 
 - dry-run 即使发现缺失输入也会保存配置并返回成功，表示“完成配置检查”，不表示模型能运行。
 - check-only 发现缺失路径时返回非零；正式运行也会先检查并停止。
+- check-only 成功后打印正式推理命令，保留原配置、workspace、所有 `--set` 和 tag，换用新的输出名称；命令同时保存为 `next_command.txt/json`。dry-run 输入齐全时先提示 check-only，输入缺失时不提示继续。正式推理是当前已实现流程的终点，不生成尚未实现的训练命令。
 - 正式运行以单进程单 GPU 为范围。不要用 torchrun 启动此 launcher；现有 SP 路径可直接使用 `inference_sp.py`，但此轮未接入其统一记录生命周期。
 - 默认使用 `configs/baseline/longlive_bf16_i2v.yaml`，输入首帧与同名文本，704×1280、32 latent（125 RGB）、4 步、seed=0、BF16；不启用编译或异步 VAE，不指定第二张 GPU。
 - 两步权重不能通过把四步配置中的采样步数单独改为 2 来替代。

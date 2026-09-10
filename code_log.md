@@ -248,3 +248,13 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 按用户最新纠正，CSV 和官方 NPZ 的正确字段均为 `dataset_source`。恢复该字段为自动映射首选，`data_source` 仅作兼容；同步配置注释、本文全局约定、CSV 文档及七字段窗口验证。用户已修正的 CSV 示例保持原样。
 - 验证：2 项相关集成测试通过，覆盖 CSV/NPZ 关联、缓存与视频窗口迁移、RGB/相机索引及首帧；另核对双字段存在时优先 dataset_source、仅有 data_source 时仍兼容。`git diff --check` 通过。
 - 参数及验证记录：`output/verification_dataset_source_20260910-202758/`。本次不涉及服务器真实数据或 GPU 验证。
+
+### 2026-09-10：成功后打印下一步命令
+
+- 第 3 步成功时在原摘要后打印窗口准备命令，引用本次 train.csv，默认抽查 10 条、导出 2 条；例如 audit_smoke_v2 → windows_smoke_v2。保留非默认 workspace、数据根目录、seed、目标帧数/FPS。退出码非 0 时不打印继续命令。
+- 第 4 步导出成功后打印 BF16 I2V 的 check-only 命令，输入指向本次 baseline_i2v；仅建索引时先建议用原配置/覆盖参数导出首帧和文本，不引用尚不存在的图片目录。
+- baseline check-only 成功后打印正式推理命令，保留配置、workspace、所有覆盖参数和 tag；dry-run 输入齐全时先建议 check-only，缺失输入时不建议继续。正式推理是当前流程终点，不生成未实现阶段的命令。
+- 下一步结果使用新名称，已有目录追加编号；命令适用于当前平台的 Bash/POSIX shell 或 PowerShell，对空格和特殊字符正确引用。在仓库目录复制执行，不自动运行；每次建议同时写入 next_command.txt 和 next_command.json（argv、cwd、shell）。跨阶段图片生成参数由基线配置控制，使用非默认窗口尺寸/时长时仍需核对。
+- 修改：`utils/next_command.py`、`inspect_realcam.py`、`prepare_realcam_windows.py`、`run_baseline.py`、`tests/test_next_command.py` 及相关使用文档。
+- 验证：56 项 CPU 测试通过、无跳过；171 个 Python 文件语法检查、git diff --check 通过。新增测试覆盖第三步成功/失败、仅索引→执行建议导出→基线检查、推理参数和含空格路径保留、失败不提示、重名避让。GPU 推理未运行。
+- 参数及结果：`output/verification_next_command_20260910-204150/`（parameters.json、tests.txt、verification.txt）。

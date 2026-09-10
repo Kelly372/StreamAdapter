@@ -16,6 +16,7 @@ from utils.project_paths import REPO_ROOT, add_path_arguments, resolve_path, wor
 from utils.realcam_dataset import sha256_file
 from utils.realcam_windows import RealCamWindowDataset, build_window_index, validate_settings
 from utils.run_record import environment_record, write_json
+from utils.next_command import data_context, next_run_name, print_next_command
 
 
 def load_window_config(path, workspace=None, overrides=()):
@@ -143,6 +144,22 @@ def main(argv=None):
             handle.write("\nResults:\n" + json.dumps(summary, indent=2))
         write_json(folder / "status.json", {"status": "completed_with_rejections" if index["rejected"] else "completed", "returncode": 0})
         print(f"Usable clips: {len(dataset)}; exported: {summary['exported_samples']}; rejected: {summary['rejected_samples']}", flush=True)
+        if summary["exported_samples"]:
+            command = ["python", "run_baseline.py", "--config", "configs/baseline/longlive_bf16_i2v.yaml",
+                       "--set", f"data.data_path=output/{name}/baseline_i2v", "--check-only",
+                       "--run-name", next_run_name(folder, "windows", "i2v_check")]
+            command += data_context(config, REPO_ROOT)
+        else:
+            # An index alone is not an I2V image directory. Export examples first.
+            command = ["python", "prepare_realcam_windows.py", "--config", args.config, "--manifest", args.manifest,
+                       "--limit", str(args.limit), "--run-name", next_run_name(folder, "windows", "preview")]
+            for override in args.overrides:
+                command += ["--set", override]
+            command += data_context(config, REPO_ROOT)
+            if args.shot_annotations:
+                command += ["--shot-annotations", args.shot_annotations]
+            command += ["--export-count", "2"]
+        print_next_command(folder, command, REPO_ROOT)
         return 0
     except (Exception, KeyboardInterrupt) as exc:
         write_json(folder / "status.json", {"status": "failed", "returncode": 2, "error": str(exc)})

@@ -10,6 +10,7 @@ from omegaconf import OmegaConf
 from utils.project_paths import REPO_ROOT, add_path_arguments, resolve_path, workspace_root
 from utils.realcam_inspection import inspect_dataset
 from utils.run_record import environment_record, write_json
+from utils.next_command import data_context, next_run_name, print_next_command
 
 
 def load_inspection_config(path, workspace=None, overrides=()):
@@ -91,6 +92,15 @@ def main(argv=None):
             print("Grouping includes directories or unidentified rows; original-video-level leakage check is incomplete. See summary.json.", flush=True)
         for failure in failures:
             print(f"Audit failed: {failure}", flush=True)
+        if code == 0:
+            command = ["python", "prepare_realcam_windows.py", "--manifest", f"output/{name}/train.csv",
+                       "--limit", "10", "--export-count", "2", "--run-name", next_run_name(folder, "audit", "windows")]
+            command += data_context(config, REPO_ROOT)
+            for key, value, default in (("seed", config.seed, 0), ("windows.rgb_frames", config.data.rgb_frames, 125),
+                                        ("windows.target_fps", config.data.target_fps, 24)):
+                if value != default:
+                    command += ["--set", f"{key}={value}"]
+            print_next_command(folder, command, REPO_ROOT)
         return code
     except (Exception, KeyboardInterrupt) as exc:
         write_json(folder / "status.json", {"status": "failed", "returncode": 2,

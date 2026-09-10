@@ -70,6 +70,8 @@ K_out = A @ K_in_pixels
 
 ## 输出与读取接口
 
+成功导出首帧/文本后，会打印 `run_baseline.py --check-only` 命令，输入自动指向本次 `baseline_i2v/`，使用 BF16 I2V 配置。仅建立索引（`--export-count 0`）时，先打印保留本次窗口配置的导出命令，避免将没有图片的目录传给推理。失败时不提示下一步。命令保存于 `next_command.txt/json`，在仓库目录执行；正式 baseline 的生成尺寸/时长由其配置决定，自定义窗口尺寸/时长时应另行核对。
+
 结果位于 `output/windows_realestate10k_<split>_f125_fps24_704x1280_seed<seed>_<时间>_<tag>/`；也可指定唯一 `--run-name`，已有目录拒绝覆盖。
 
 | 文件 | 内容 |

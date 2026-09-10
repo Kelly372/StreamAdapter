@@ -10,6 +10,7 @@ import sys
 from omegaconf import OmegaConf
 from utils.project_paths import REPO_ROOT, add_path_arguments, load_config, resolve_path
 from utils.run_record import environment_record, write_json
+from utils.next_command import next_run_name, print_next_command
 
 
 def validate_baseline(config):
@@ -103,6 +104,18 @@ def main():
     if args.dry_run or args.check_only:
         status = "dry_run" if args.dry_run else "inputs_valid" if not missing else "inputs_missing"
         write_json(folder / "status.json", {"status": status, "gpu_tested": False})
+        if not missing:
+            command = ["python", "run_baseline.py", "--config", args.config]
+            if args.workspace_root is not None:
+                command += ["--workspace-root", args.workspace_root]
+            for override in args.overrides:
+                command += ["--set", override]
+            if args.tag:
+                command += ["--tag", args.tag]
+            if args.dry_run:
+                command += ["--check-only"]
+            command += ["--run-name", next_run_name(folder, "check", "check" if args.dry_run else "baseline")]
+            print_next_command(folder, command, REPO_ROOT)
         return 1 if args.check_only and missing else 0
     if missing:
         write_json(folder / "status.json", {"status": "inputs_missing", "gpu_tested": False})
