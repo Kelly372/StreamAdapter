@@ -17,7 +17,7 @@ _LLV2_PROFILE_OUTPUT_DIR = os.environ.get("LLV2_PROFILE_OUTPUT_DIR", "").strip()
 _LLV2_PROFILE_CALL_COUNTER = 0
 from wan_5b.utils.fm_solvers import FlowDPMSolverMultistepScheduler, get_sampling_sigmas, retrieve_timesteps
 from wan_5b.utils.fm_solvers_unipc import FlowUniPCMultistepScheduler
-from utils.wan_5b_wrapper import WanDiffusionWrapper, WanTextEncoder, build_vae_5b
+from utils.wan_5b_wrapper import WanDiffusionWrapper, WanTextEncoder, build_vae_5b, build_text_encoder
 from utils.dataset import DEFAULT_SCENE_CUT_PREFIX
 from utils.config import section_get, wan_default_config
 from utils.i2v_conditioning import (
@@ -43,7 +43,7 @@ class CausalDiffusionInferencePipeline(torch.nn.Module):
             raise ValueError(f"Only Wan2.2-TI2V-5B is supported in this release, got {model_name}")
         self.generator = WanDiffusionWrapper(
             **getattr(args, "model_kwargs", {}), is_causal=True) if generator is None else generator
-        self.text_encoder = WanTextEncoder() if text_encoder is None else text_encoder
+        self.text_encoder = build_text_encoder(args) if text_encoder is None else text_encoder
         self.vae = build_vae_5b(args) if vae is None else vae
 
         # iter-33: optionally compile the VAE decoder (cuda:2). The Python

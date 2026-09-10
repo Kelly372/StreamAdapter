@@ -12,6 +12,7 @@ wan_models/
 videos/
 logs/
 outputs/
+output/
 wandb/
 debug_save/
 pretrained/

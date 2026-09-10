@@ -8,7 +8,7 @@ import torch
 from model.base import BaseModel
 from pipeline import CausalDiffusionInferencePipeline
 from utils.i2v_conditioning import _overwrite_i2v_context, _zero_i2v_context_timestep
-from utils.wan_5b_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper
+from utils.wan_5b_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper, build_text_encoder, build_vae_5b
 
 
 class CausalDiffusion(BaseModel):
@@ -126,10 +126,10 @@ class CausalDiffusion(BaseModel):
         self.generator = WanDiffusionWrapper(**getattr(args, "model_kwargs", {}), is_causal=True)
         self.generator.model.requires_grad_(True)
 
-        self.text_encoder = WanTextEncoder()
+        self.text_encoder = build_text_encoder(args)
         self.text_encoder.requires_grad_(False)
 
-        self.vae = WanVAEWrapper()
+        self.vae = build_vae_5b(args)
         self.vae.requires_grad_(False)
 
         self.scheduler = self.generator.get_scheduler()

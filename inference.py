@@ -54,6 +54,7 @@ from utils.dataset import (
 )
 from utils.misc import set_seed
 from utils.config import normalize_config, section_get, wan_default_config
+from utils.project_paths import add_path_arguments, load_config
 from utils.nvfp4_checkpoint import (
     clean_fsdp_state_dict_keys,
     drop_fouroversix_master_weights,
@@ -94,6 +95,7 @@ def save_prompts_to_txt(prompts_for_sample, prompt_txt_path: str, is_main_proces
             print(f"Warning: failed to save prompts to {prompt_txt_path}: {e}")
 
 parser = argparse.ArgumentParser()
+add_path_arguments(parser)
 parser.add_argument("--config_path", type=str, help="Path to the config file")
 te_quant_group = parser.add_mutually_exclusive_group()
 te_quant_group.add_argument(
@@ -111,7 +113,9 @@ te_quant_group.add_argument(
 parser.set_defaults(use_te_quant=None)
 args = parser.parse_args()
 
-config = normalize_config(OmegaConf.load(args.config_path))
+config = load_config(args.config_path, workspace=args.workspace_root, overrides=args.overrides)
+if config.get("experiment", {}).get("status") == "spec_only":
+    raise ValueError("This is a camera training specification, not a runnable inference config.")
 if args.use_te_quant is not None:
     config.model_quant_use_transformer_engine = args.use_te_quant
 
@@ -556,6 +560,9 @@ else:
 if local_rank == 0:
     print(f"[data] data_path={data_path}, mode={getattr(dataset, '_mode', dataset.__class__.__name__)}, num_blocks={num_blocks}")
 num_prompts = len(dataset)
+if local_rank == 0 and config.get("run", {}).get("record_parameters", False):
+    from utils.run_record import save_runtime_record
+    save_runtime_record(config, pipeline, device, num_prompts)
 print(f"Number of prompts: {num_prompts}")
 
 if dist.is_initialized():

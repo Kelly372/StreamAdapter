@@ -77,6 +77,8 @@ def normalize_config(config):
     configs can group those fields for readability, then call this function at
     the entry point to preserve the existing runtime contract.
     """
+    from utils.project_paths import resolve_config_paths
+    resolve_config_paths(config)
     for section_key in SECTION_KEYS:
         section = config.get(section_key, None)
         if section is None:
@@ -171,4 +173,4 @@ def normalize_config(config):
                     OmegaConf.to_container(config.model_kwargs, resolve=True)
                 )
 
-    return config
+    return resolve_config_paths(config)

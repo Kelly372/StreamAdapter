@@ -1,0 +1,102 @@
+# Step 1: agreed experimental contract, NOT a runnable training config.
+# Architecture, stage durations and optimization settings await implementation.
+experiment:
+  name: realestate10k_camera_adapter_a
+  version: 1
+  status: spec_only
+
+paths:
+  workspace_root: null
+  data_root: public_data/RealCam-Vid
+  model_root: pretrained_model/LongLive
+base_model_dir: ../Wan2.2-TI2V-5B
+
+model_kwargs:
+  model_name: Wan2.2-TI2V-5B
+  timestep_shift: 5.0
+  num_frame_per_block: 8
+  local_attn_size: 32
+
+checkpoints:
+  generator_ckpt: LongLive-2.0-5B/model_bf16.pt
+
+algorithm:
+  trainer: camera_supervised
+  i2v: true
+  independent_first_frame: true
+  teacher_forcing: false
+  load_real_score: false
+  load_fake_score: false
+  history_source: generated
+  history_requires_grad: false
+  target_gradient: full_sampling_chain
+  clear_history_after_update: true
+  targets_per_iteration: 1
+
+camera_adapter:
+  enabled: true
+  representation: plucker
+  coordinate_reference: window_first_frame
+  reset_coordinates_per_block: false
+  temporal_dependency: current_and_past_blocks
+  output_initialization: zero
+  architecture: null
+  injection_layers: null
+  width: null
+  depth: null
+
+freeze:
+  generator: true
+  vae: true
+  text_encoder: true
+  trainable_component: camera_adapter
+
+data:
+  dataset: RealCam-Vid
+  subset: RealEstate10K
+  metadata_format: csv
+  train_csv: null  # exact CSV paths/columns will be inspected in step 3
+  test_csv: null
+  target_fps: 24
+  rgb_frames: 125
+  image_or_video_shape: [1, 32, 48, 44, 80]
+  random_window_start: true
+  single_continuous_shot: true
+  repeat_frames_to_pad: false
+
+inference:
+  sampling_steps: 4  # match the selected BF16 checkpoint; S2 needs its own profile
+  guidance_scale: 1.0
+  independent_first_frame: true
+  sink_size: 8
+  multi_shot_sink: true
+  multi_shot_rope_offset: 8
+
+loss:
+  type: masked_latent_l1
+  target: final_sampled_latent
+  reduction: valid_element_mean
+  exclude_conditioning_first_frame: true
+  exclude_padding: true
+  fm_weight: 0.0
+  temporal_difference_weight: 0.0
+  boundary_weight: 0.0
+  geometry_weight: 0.0
+
+curriculum:
+  stages:
+    - {name: warmup, steps: null, probabilities: [1.0, 0.0, 0.0, 0.0]}
+    - {name: continuation, steps: null, probabilities: [0.5, 0.5, 0.0, 0.0]}
+    - {name: longer_history, steps: null, probabilities: [0.3, 0.3, 0.4, 0.0]}
+    - {name: four_block_mix, steps: null, probabilities: [0.25, 0.25, 0.25, 0.25]}
+
+training:
+  precision: bf16  # initial implementation choice, not a tested training result
+  batch_size: null
+  learning_rate: null
+  gradient_accumulation_steps: null
+  max_steps: null
+
+logging:
+  seed: 0
+  parameter_record: training.txt

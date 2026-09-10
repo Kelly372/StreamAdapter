@@ -4,6 +4,10 @@
 
 # 🎬 LongLive 2.0: An NVFP4 Parallel Infrastructure for Long Video Generation
 
+本地 StreamAdapter 开发：修改清单与进度见 [code_log.md](code_log.md)；
+使用可迁移路径和独立结果目录复现基础模型，见 [复现说明](docs/baseline_reproduction.md)。
+入口：`python run_baseline.py --check-only`，检查通过后运行 `python run_baseline.py`。
+
 [![Paper](https://img.shields.io/badge/Paper-LongLive_2.0-brown)](https://arxiv.org/abs/2605.18739)
 [![Paper](https://img.shields.io/badge/Paper-LongLive_1.0-orange)](https://github.com/NVlabs/LongLive/tree/v1.0)
 [![Paper](https://img.shields.io/badge/Paper-LongLive_RAG-yellow)](https://github.com/qixinhu11/LongLive-RAG)

@@ -10,7 +10,7 @@ import math
 from pipeline import SelfForcingTrainingPipeline
 from utils.config import section_get
 from utils.loss import get_denoising_loss
-from utils.wan_5b_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper
+from utils.wan_5b_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper, build_text_encoder, build_vae_5b
 
 
 def build_default_denoising_step_list(sampling_steps, num_train_timesteps=1000, shift=1.0, include_zero=True):
@@ -82,10 +82,10 @@ class BaseModel(nn.Module):
         self.fake_score.model.requires_grad_(True)
 
         # Text Encoder & VAE
-        self.text_encoder = WanTextEncoder()
+        self.text_encoder = build_text_encoder(args)
         self.text_encoder.requires_grad_(False)
 
-        self.vae = WanVAEWrapper()
+        self.vae = build_vae_5b(args)
         self.vae.requires_grad_(False)
 
         self.scheduler = self.generator.get_scheduler()

@@ -16,6 +16,7 @@ from tqdm import tqdm
 
 from pipeline.causal_diffusion_inference_sp import CausalDiffusionInferencePipelineSP
 from utils.config import normalize_config, section_get
+from utils.project_paths import add_path_arguments, load_config
 from utils.dataset import MultiTextConcatDataset, eval_collate_fn
 from utils.lora_utils import configure_lora_for_model
 from utils.memory import DynamicSwapInstaller, get_cuda_free_memory_gb
@@ -196,6 +197,7 @@ def configure_generator_torch_compile(pipeline, config, is_main_process):
 
 
 parser = argparse.ArgumentParser()
+add_path_arguments(parser)
 parser.add_argument("--config_path", type=str, required=True, help="Path to the config YAML file")
 te_quant_group = parser.add_mutually_exclusive_group()
 te_quant_group.add_argument("--use_te_quant", dest="use_te_quant", action="store_true")
@@ -203,7 +205,7 @@ te_quant_group.add_argument("--no_use_te_quant", dest="use_te_quant", action="st
 parser.set_defaults(use_te_quant=None)
 args = parser.parse_args()
 
-config = normalize_config(OmegaConf.load(args.config_path))
+config = load_config(args.config_path, workspace=args.workspace_root, overrides=args.overrides)
 if args.use_te_quant is not None:
     config.model_quant_use_transformer_engine = args.use_te_quant
 if not hasattr(config, "sampling_steps") or config.sampling_steps is None:

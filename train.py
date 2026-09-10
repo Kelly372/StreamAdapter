@@ -7,10 +7,12 @@ import wandb
 
 from trainer import ScoreDistillationTrainer, DiffusionTrainer
 from utils.config import normalize_config
+from utils.project_paths import add_path_arguments, load_config, resolve_path, REPO_ROOT
 
 
 def main():
     parser = argparse.ArgumentParser()
+    add_path_arguments(parser)
     parser.add_argument("--config_path", type=str, required=True)
     parser.add_argument("--no_save", action="store_true")
     parser.add_argument("--no_visualize", action="store_true")
@@ -22,14 +24,16 @@ def main():
 
     args = parser.parse_args()
 
-    config = normalize_config(OmegaConf.load(args.config_path))
+    config = load_config(args.config_path, workspace=args.workspace_root, overrides=args.overrides)
+    if config.get("experiment", {}).get("status") == "spec_only":
+        raise NotImplementedError("Camera Adapter training is specified but not implemented yet (see code_log.md).")
     config.no_save = args.no_save
     config.no_visualize = args.no_visualize
 
     config_name = os.path.splitext(os.path.basename(args.config_path))[0]
     config.config_name = config_name
-    config.logdir = args.logdir
-    config.wandb_save_dir = args.wandb_save_dir
+    config.logdir = str(resolve_path(args.logdir, REPO_ROOT)) if args.logdir else ""
+    config.wandb_save_dir = str(resolve_path(args.wandb_save_dir, REPO_ROOT)) if args.wandb_save_dir else ""
     config.disable_wandb = args.disable_wandb
     config.auto_resume = not args.no_auto_resume  # Default to True unless --no-auto-resume is specified
     config.generate_before_train = args.generate_before_train
@@ -38,6 +42,8 @@ def main():
         trainer = ScoreDistillationTrainer(config)
     elif config.trainer == "diffusion":
         trainer = DiffusionTrainer(config)
+    else:
+        raise ValueError(f"Unsupported trainer: {config.trainer}")
     trainer.train()
 
     wandb.finish()
