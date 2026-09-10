@@ -16,7 +16,7 @@ from utils.project_paths import REPO_ROOT
 def environment_record():
     versions = {}
     for package in ("torch", "torchvision", "omegaconf", "diffusers", "transformers",
-                    "flash-attn", "torchao", "transformer-engine", "fouroversix"):
+                    "flash-attn", "torchao", "transformer-engine", "fouroversix", "numpy", "av"):
         try:
             versions[package] = metadata.version(package)
         except metadata.PackageNotFoundError:

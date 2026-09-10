@@ -1,0 +1,35 @@
+# CPU-only metadata / video audit. Does not load models or sample windows.
+paths:
+  workspace_root: null
+  data_root: public_data/RealCam-Vid  # workspace-relative
+seed: 0
+data:
+  subset: RealEstate10K
+  assume_subset: null  # set only when the CSV is known to contain this subset
+  train_csv: RealEstate10K_train.csv  # confirmed local name; data-root-relative
+  test_csv: null
+  train_camera_npz: null  # auto: unique RealEstate10K_train.npz or RealCam-Vid_train.npz
+  test_camera_npz: null
+  encoding: utf-8-sig
+  delimiter: ','
+  columns: {}  # canonical name: actual CSV column; see docs/realcam_csv.md
+  source_id_regex: null  # only if original-video ID is encoded in the video path
+  group_by: source_or_directory  # no source ID: use confirmed parent directory as a group, not as an original-video ID
+  validation_fraction: 0.05  # stable group hash split from train; test is preserved
+  camera_convention: opencv_w2c
+  intrinsics_units: normalized
+  timestamps_unit: seconds
+  target_fps: 24
+  rgb_frames: 125
+inspection:
+  probe_mode: decode  # decode | header | metadata; weaker checks labeled in results
+  require_caption: true
+  min_valid_pose_fraction: 1.0
+  rotation_tolerance: 0.01
+  fps_relative_tolerance: 0.02
+  timestamp_tolerance_seconds: 0.002
+  limit_per_split: 0  # 0 = all; source IDs still scanned in ALL rows when limited
+  progress_every: 100
+  csv_field_size_limit: 16777216
+  fail_on_reject: false
+  fail_on_leakage: true

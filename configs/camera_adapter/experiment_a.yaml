@@ -55,7 +55,7 @@ data:
   dataset: RealCam-Vid
   subset: RealEstate10K
   metadata_format: csv
-  train_csv: null  # exact CSV paths/columns will be inspected in step 3
+  train_csv: ${paths.data_root}/RealEstate10K_train.csv  # step 3 audit: configs/data/realcam_inspection.yaml
   test_csv: null
   target_fps: 24
   rgb_frames: 125

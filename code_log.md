@@ -8,6 +8,7 @@
 
 - 目标目录：`workspace/project/StreamAdapter`。当前本地检出的目录名可以不同。
 - 数据：`workspace/public_data/RealCam-Vid` 中的 RealEstate10K；元数据为 train/test CSV。
+- 已确认训练表 `RealEstate10K_train.csv`，字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。`dataset_source=RealEstate10K`，视频路径形如 `RealEstate10K/train/<目录>/<视频>.mp4`；相机参数来自数据根目录的 `RealCam-Vid_train.npz`。上一级目录为相似场景分组，不标记为已验证的原始视频 ID。
 - Wan2.2 基础组件：`workspace/pretrained_model/Wan2.2-TI2V-5B`。
 - LongLive 蒸馏权重：`workspace/pretrained_model/LongLive` 下的 `LongLive-2.0-5B`、`LongLive-2.0-5B-NVFPS-S4`、`LongLive-2.0-5B-NVFPS-S2`。
 - `NVFPS` 是用户提供的本地目录拼写，数值格式仍为 NVFP4；实际目录若为 `NVFP4`，使用配置/命令行覆盖。
@@ -60,13 +61,17 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - [ ] 在用户实际模型和 CUDA 环境执行基础模型推理，确认视频输出。
 - 当前统一记录入口为 `run_baseline.py`（单进程单卡）；原始 train/inference_sp 的完整运行目录生命周期将在第 12 步接入。
 
-### 3. RealCam-Vid CSV 数据接入与检查 — 待实现
+### 3. RealCam-Vid CSV 数据接入与检查 — 已实现首轮，待真实数据验收
 
-- [ ] 核查 CSV 列名、视频/相机/文本路径及来源标识，读取 train/test 并筛选 RealEstate10K。
-- [ ] 检查文件、FPS、帧数、位姿长度/有效性，保存剔除原因与统计。
-- [ ] 保留 train/test 划分；训练期间验证集从 train 按原始视频来源划分。
-- [ ] 保留原始视频，以窗口索引采样，不强制转换为官方目录格式。
-- 建议：`utils/realcam_dataset.py`、数据检查脚本。
+- [x] 接入用户确认的 CSV 列名/相对视频路径，读取 train/test 并筛选 RealEstate10K；支持列名映射。
+- [x] 按 video_path 关联官方相机 NPZ；另支持列内数组、JSON/数值 NPZ/内外参 NPY 引用。保留相机坐标及 align_factor，不提前做几何转换。
+- [x] 检查文件、FPS、实际解码帧数、位姿长度/有效性、可用时间戳，保存剔除原因与统计；明确区分 metadata/header/decode。
+- [x] 保留 CSV 原始 train/test；验证集从 train 按明确原视频 ID 或场景目录稳定分组，分别记录分组依据。检查重复路径及组间重叠，抽查时也扫描完整分组；无真实来源 ID 时不宣称完成原视频级泄漏检查。
+- [x] 保留原始视频，提供可迁移清单和按需相机读取接口；实际窗口索引与视频张量采样在第 4 步实现。
+- [x] 独立 output 子目录记录全部配置、inspection.txt、数据哈希/字段映射、运行环境、清单和状态；拒绝同名覆盖。
+- [x] 已读取本地实际 `E:/codexspace/RealCam-Vid_test.npz`，核实字段、数组形状及部分 test 条目指向原始 train 视频目录；不能从路径推断 RealCam-Vid 的集合划分。
+- [ ] 在用户真实 CSV 和视频上执行完整验收；补充可靠原视频 ID 后可进一步核实来源级泄漏。当前只承诺目录分组不跨 train/validation，重叠 test 分组被剔除并报告。
+- 文件：`inspect_realcam.py`、`utils/realcam_dataset.py`、`utils/realcam_inspection.py`、`configs/data/realcam_inspection.yaml`、`docs/realcam_csv.md`。
 
 ### 4. 连续窗口采样与几何同步 — 待实现
 
@@ -162,3 +167,16 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 当前 I2V 基线输入首帧和同名文本，沿用现有首帧 latent 固定逻辑；相机轨迹、CSV/GT 视频和控制训练仍未接入。
 - 基础模型 I2V 复现与最终“首帧＋相机轨迹”的受控 I2V 分阶段验证，不能将前者视为已实现相机控制。
 - 验证：13 项 CPU 测试通过，包含无 `--config` 时默认 I2V、首帧模式及 S4/S2 I2V 权重/步数匹配；21 份 YAML 解析/重载通过，`git diff --check` 通过。结果保存于 `output/verification_i2v_default/verification.txt`。GPU 推理未执行。
+
+### 2026-09-10：步骤 3；RealEstate10K CSV / 相机 NPZ 数据接入
+
+- 新增 `inspect_realcam.py`、`utils/realcam_dataset.py`、`utils/realcam_inspection.py`、`configs/data/realcam_inspection.yaml`、18 项数据测试及 `docs/realcam_csv.md`；同步 README、复现说明和实验 A 中已确认的 train CSV 路径。
+- 按用户提供的 7 个 CSV 字段适配，保留长/短文本、align_factor、camera_scale、vtss_score。缺失内外参时按 video_path 关联官方 NPZ，不依赖行顺序；自动发现唯一匹配相机文件，也可覆盖路径。
+- 官方整表 NPZ 每个 split 加载一次，限定 NumPy 对象类型；检查后的相机保存为独立数值缓存。记录原 CSV/NPZ 哈希、列映射、相机内容哈希，支持结果目录和数据根目录迁移。
+- 用户说明上级目录为相似场景分组：默认有明确原视频 ID 时用原视频 ID，否则使用目录组，保留空 source_id 并显式记录原视频级泄漏检查未完成。依据 CSV 保留 train/test，按组划分 validation；抽查也扫描全表分组及重复路径。
+- 对本地实际 `E:/codexspace/RealCam-Vid_test.npz` 完成相机检查：共 5,000 条，RealEstate10K 2,152 条、296,250 个相机帧，全部通过当前形状/有限值/齐次矩阵/旋转/内参/align_factor 检查；每条长度 16–279。原路径分布为 train 1,932 条、test 220 条，证明不能从目录重建 RealCam-Vid split。该检查不验证真实视频或时间对齐。
+- 实际 NPZ 检查及全部参数：`output/verification_step03/real_npz_20260910-153118/inspection.txt`。
+- 验证：18 项新数据测试＋13 项路径/基线测试，共 31 项通过，无跳过；覆盖真实合成 MP4 解码/损坏文件、CSV/NPZ 乱序关联、用户 CSV 字段、目录分组、跨集合重叠、相机缓存迁移与变化检测。22 份 YAML 在路径测试中解析/重载通过；164 个 Python 文件语法检查、`git diff --check` 通过。
+- 从仓库外 cwd 运行真实 CLI，使用同样 7 列 CSV、官方格式 NPZ 和 125 帧 MP4 合成样本，正确生成 train/test 清单及完整参数记录。报告：`output/verification_step03/20260910-152850/verification.txt`；运行结果：`output/data_check_realestate10k_decode_step03_synthetic_20260910-152850/`。
+- 尝试全仓库测试发现时，另有 7 个旧测试模块因本机缺少 torch/pytest 无法导入；不能宣称全部模型测试通过。本轮没有 GPU 推理/训练，也没有在真实 CSV 和视频上执行完整检查。
+- 下一步：第 4 步实现 24 FPS / 125 帧连续窗口、窗口首帧提取、RGB/相机实际索引同步、裁剪缩放同步更新内参。当前 I2V 基线继续使用图片和同名文本，相机训练仍为 spec_only。
