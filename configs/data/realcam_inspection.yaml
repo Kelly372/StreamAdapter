@@ -6,9 +6,9 @@ seed: 0
 data:
   subset: RealEstate10K
   assume_subset: null  # set only when the CSV is known to contain this subset
-  train_csv: RealEstate10K_train.csv  # confirmed local name; data-root-relative
+  train_csv: null  # auto: prefer RealEstate10K_<split>.csv; explicit paths are data-root-relative
   test_csv: null
-  train_camera_npz: null  # auto: unique RealEstate10K_train.npz or RealCam-Vid_train.npz
+  train_camera_npz: null  # auto: prefer RealEstate10K_train.npz, then RealCam-Vid_train.npz
   test_camera_npz: null
   encoding: utf-8-sig
   delimiter: ','

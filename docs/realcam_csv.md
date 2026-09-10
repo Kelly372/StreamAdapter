@@ -35,9 +35,50 @@ python inspect_realcam.py --set data.train_camera_npz=RealCam-Vid_train.npz --se
 python inspect_realcam.py --probe-mode metadata --limit 10 --tag metadata-smoke
 ```
 
-默认 train CSV 使用已确认的 `RealEstate10K_train.csv`，test CSV 自动发现；将 `data.train_csv=null` 也可启用 train 自动发现。自动发现仅接受文件名中带独立 `train` / `test` 标记的唯一 CSV（如 `train.csv`、`RealEstate10K_train.csv`）。发现零个或多个会报错，需指定路径。
+默认 train/test CSV 自动发现，优先选择 `RealEstate10K_<split>.csv`，也识别用户目录中的 `RealState10K_<split>.csv` 拼写；总表与子集表同时存在时选择子集表。存在多个子集表（包括两种拼写同时存在），仍要求显式设置 `data.train_csv/test_csv`。没有子集表时，接受文件名中带独立 train/test 标记的唯一 CSV；显式路径始终优先。
 
-CSV 没有相机列时，会查找数据根目录下唯一的 `RealEstate10K_<split>.npz` 或 `RealCam-Vid_<split>.npz`；发现多个要求显式配置。缺失时明确报错，不生成虚拟相机。非标准布局用 `--workspace-root` 覆盖；`paths.data_root` 相对 workspace，显式 CSV/NPZ、视频和相机引用均相对数据根目录。视频、CSV 和逐样本相机文件须位于数据根目录内。官方整表 NPZ 也允许显式指定根目录外的绝对路径（如本地示例）；输出缓存可迁移，服务器配置仍应使用相对路径。视频路径同时接受 `/` 和 `\`。
+CSV 没有相机列时，优先选择数据根目录下的 `RealEstate10K_<split>.npz`，缺失时使用 `RealCam-Vid_<split>.npz`；显式配置优先于自动发现。两者都缺失时明确报错，不生成虚拟相机。非标准布局用 `--workspace-root` 覆盖；`paths.data_root` 相对 workspace，显式 CSV/NPZ、视频和相机引用均相对数据根目录。视频、CSV 和逐样本相机文件须位于数据根目录内。官方整表 NPZ 也允许显式指定根目录外的绝对路径（如本地示例）；输出缓存可迁移，服务器配置仍应使用相对路径。视频路径同时接受 `/` 和 `\`。
+
+## 第 3A 步：预先分离 RealEstate10K NPZ
+
+脚本 `extract_realestate10k.py` 可将两份总 NPZ 分离为 RealEstate10K 专用 NPZ。它只依据 `dataset_source=RealEstate10K` 筛选，不根据视频路径里的 train/test 重新划分，也不依据 CSV 删行；每条记录的全部字段、数组 dtype/形状/内容和相对顺序保持不变。
+
+在标准服务器目录中运行：
+
+```bash
+python extract_realestate10k.py --run-name realestate10k_metadata_v1
+```
+
+默认读取 `workspace/public_data/RealCam-Vid/RealCam-Vid_train.npz` 和 `RealCam-Vid_test.npz`，在仓库生成：
+
+```text
+output/realestate10k_metadata_v1/
+  RealEstate10K_train.npz
+  RealEstate10K_test.npz
+  extraction.txt
+  parameters.json
+  launch.json
+  summary.json
+  status.json
+```
+
+原文件不覆盖；已存在的结果目录也不覆盖。再次提取应换一个 `--run-name`，或使用 `--tag` 生成包含时间的唯一目录。每个 split 顺序处理，保存后重新加载，逐字段核对；摘要记录输入/选中/排除数量及输入输出 SHA256。正常完成时 `status=completed`、各 split 的 `roundtrip_verified=true`。缺失来源字段、零匹配、缺失文件或校验失败均返回非零退出码。
+
+随后直接让检查器读取输出目录中的 NPZ，无需复制到原数据目录：
+
+```bash
+python inspect_realcam.py --camera-metadata-dir output/realestate10k_metadata_v1 --limit 10 --tag subset-smoke
+```
+
+`--camera-metadata-dir` 相对仓库根目录解析，也接受绝对路径；此参数会覆盖两个 `data.*_camera_npz` 设置，并要求所选文件存在，不静默回退总 NPZ。CSV 和视频仍从原数据根目录读取。全量检查时移除 `--limit 10`。
+
+仅验证本地已有 test 文件可以运行：
+
+```bash
+python extract_realestate10k.py --splits test --test-npz "E:/codexspace/RealCam-Vid_test.npz" --tag local-test
+```
+
+`--train-npz` / `--test-npz` 相对数据根目录解析，也接受绝对路径。只提取 test 的结果目录不能直接用于同时检查 train/test；服务器正常流程应提取两份。首次分离仍要将当前 split 的总 NPZ 解压至内存，但后续检查只加载子集 NPZ。分离过程不读取视频，也不替代第 3 步的视频/相机有效性检查。
 
 ## 字段约定
 

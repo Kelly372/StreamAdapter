@@ -189,7 +189,7 @@ def inspect_dataset(config, output_dir, probe=probe_video):
     stats = {split: Counter() for split in ("train", "test")}
     metadata_sources = {}
     for split in ("train", "test"):
-        csv_path = discover_csv(root, split, settings.get(f"{split}_csv"))
+        csv_path = discover_csv(root, split, settings.get(f"{split}_csv"), subset=settings["subset"])
         relative_csv = relative_path(csv_path, root)
         before_hash = sha256_file(csv_path)
         iterator = csv_rows(csv_path, encoding=settings["encoding"], delimiter=settings["delimiter"],
@@ -200,8 +200,7 @@ def inspect_dataset(config, output_dir, probe=probe_video):
         if not camera_npz and not mapped["camera_path"] and not (mapped["intrinsics"] and mapped["extrinsics"]):
             known = [root / f"{prefix}_{split}.npz" for prefix in (settings["subset"], "RealCam-Vid")]
             available = list(dict.fromkeys(path for path in known if path.is_file()))
-            if len(available) > 1:
-                raise ValueError(f"Multiple matching camera NPZs: {available}. Set data.{split}_camera_npz explicitly.")
+            # A dedicated subset archive wins over the full archive when both exist.
             camera_npz = available[0] if available else None
         camera_index, camera_source = None, None
         if camera_npz:

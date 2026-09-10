@@ -73,6 +73,16 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - [ ] 在用户真实 CSV 和视频上执行完整验收；补充可靠原视频 ID 后可进一步核实来源级泄漏。当前只承诺目录分组不跨 train/validation，重叠 test 分组被剔除并报告。
 - 文件：`inspect_realcam.py`、`utils/realcam_dataset.py`、`utils/realcam_inspection.py`、`configs/data/realcam_inspection.yaml`、`docs/realcam_csv.md`。
 
+#### 3A. 预先分离 RealEstate10K 相机 NPZ — 已实现
+
+- [x] 新增 `extract_realestate10k.py`，从 `RealCam-Vid_train/test.npz` 按 dataset_source 分离 `RealEstate10K_train/test.npz`，支持分别指定源文件或只处理一个 split。
+- [x] 保持源 NPZ 的 train/test 归属和条目顺序，不依据视频目录名重新划分，不改变任何字段或相机数组。
+- [x] 输出保存于仓库 `output/<run_name>/`，含 extraction.txt、全部参数、环境、输入输出哈希、数量统计、状态；不覆盖输入和已有结果。
+- [x] 输出重新读取后逐字段校验类型/值及数组 dtype/形状/内容。缺失 dataset_source、零匹配或校验失败明确报错。
+- [x] 检查器支持 `--camera-metadata-dir` 直接关联分离结果，原 CSV/视频不搬动；自动发现 NPZ 时子集表优先于总表。
+- [x] 修复 CSV 总表/子集表并存的选择：优先唯一 RealEstate10K 表，兼容已报告的 RealState10K 文件名；多个同级候选仍要求显式路径。
+- 分支为可选数据准备步骤，不能替代视频解码检查，不推进第 4 步窗口采样。
+
 ### 4. 连续窗口采样与几何同步 — 待实现
 
 - [ ] 按 24 FPS 的时间间隔随机采样 125 帧，RGB/相机使用相同实际索引。
@@ -180,3 +190,12 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 从仓库外 cwd 运行真实 CLI，使用同样 7 列 CSV、官方格式 NPZ 和 125 帧 MP4 合成样本，正确生成 train/test 清单及完整参数记录。报告：`output/verification_step03/20260910-152850/verification.txt`；运行结果：`output/data_check_realestate10k_decode_step03_synthetic_20260910-152850/`。
 - 尝试全仓库测试发现时，另有 7 个旧测试模块因本机缺少 torch/pytest 无法导入；不能宣称全部模型测试通过。本轮没有 GPU 推理/训练，也没有在真实 CSV 和视频上执行完整检查。
 - 下一步：第 4 步实现 24 FPS / 125 帧连续窗口、窗口首帧提取、RGB/相机实际索引同步、裁剪缩放同步更新内参。当前 I2V 基线继续使用图片和同名文本，相机训练仍为 spec_only。
+
+### 2026-09-10：步骤 3A；分离 RealEstate10K NPZ 并修复文件选择歧义
+
+- 新增 `extract_realestate10k.py` 及 `tests/test_realcam_extraction.py`。默认依次读取总 train/test NPZ，只筛选 dataset_source，保存同格式的 arr_0 字典数组；保留所有字段、原划分、相机数组 dtype/形状/内容及原顺序，输出后逐字段重读校验。
+- 默认结果放在 `output/metadata_realestate10k_<splits>_<时间>_<tag>/`，也可用 `--run-name` 指定唯一子目录；记录 extraction.txt、parameters.json、launch.json、summary.json、status.json 和输入输出 SHA256。不自动改写数据目录。
+- `inspect_realcam.py` 新增 `--camera-metadata-dir`（仓库相对路径），直接使用分离结果。CSV 自动选择优先唯一子集表，兼容用户报告的 RealState10K 拼写；两种子集拼写同时存在仍要求显式选择。相机 NPZ 自动选择优先 RealEstate10K，再回退 RealCam-Vid；显式路径或目录覆盖优先。
+- 已实际运行本地 test 分离：5,000 → 2,152 条，排除 2,848 条，输出 27,860,909 字节，全字段往返校验通过。结果及参数：`output/metadata_realestate10k_test_20260910-173628-455784_step03a-local-verification/`。本机未提供总 train NPZ，真实 train 分离尚未执行；train/test 双文件流程已用合成数据验证。
+- 验证：新增 5 项测试，连同已有 31 项，共 36 项通过，无跳过；覆盖原始顺序/dtype/嵌套字段保留、原文件不变、同名拒绝覆盖、空子集/缺失字段失败、CSV 同级歧义、分离结果到检查器的双 split 串联、单 split 和缺失输入记录。166 个 Python 文件语法检查、`git diff --check` 通过。
+- 验证记录：`output/verification_step03a/20260910-173931/verification.txt` 和同目录 parameters.json；同步 README、`docs/realcam_csv.md` 与数据检查默认配置。未执行 GPU 推理或训练；第 4 步保持待实现。

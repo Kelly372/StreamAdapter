@@ -34,6 +34,7 @@ def main(argv=None):
     parser.add_argument("--config", default="configs/data/realcam_inspection.yaml")
     add_path_arguments(parser)
     parser.add_argument("--probe-mode", choices=("decode", "header", "metadata"))
+    parser.add_argument("--camera-metadata-dir", help="Extracted NPZ directory, relative to repository; selected files must exist")
     parser.add_argument("--limit", type=int, help="Camera/video checks per split; 0 = all; source/directory groups scanned globally")
     parser.add_argument("--tag", default="")
     parser.add_argument("--run-name", help="Unique output subfolder; never overwritten")
@@ -44,6 +45,10 @@ def main(argv=None):
     if args.limit is not None:
         overrides.append(f"inspection.limit_per_split={args.limit}")
     config = load_inspection_config(args.config, args.workspace_root, overrides)
+    if args.camera_metadata_dir:
+        directory = resolve_path(args.camera_metadata_dir, REPO_ROOT)
+        for split in ("train", "test"):
+            config.data[f"{split}_camera_npz"] = str(directory / f"{config.data.subset}_{split}.npz")
     name = args.run_name or (f"data_check_realestate10k_{config.inspection.probe_mode}_"
                              f"seed{config.seed}_{datetime.now():%Y%m%d-%H%M%S-%f}" +
                              (f"_{args.tag}" if args.tag else ""))

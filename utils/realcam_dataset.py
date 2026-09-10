@@ -68,7 +68,7 @@ def relative_path(path, root):
     return Path(path).resolve().relative_to(Path(root).resolve()).as_posix()
 
 
-def discover_csv(root, split, explicit=None):
+def discover_csv(root, split, explicit=None, *, subset=None):
     if explicit:
         path = resolve_path(explicit, root)
         if not path.is_file():
@@ -76,6 +76,13 @@ def discover_csv(root, split, explicit=None):
         return data_path(path, root)
     matches = sorted(path for path in Path(root).rglob("*.csv")
                      if split in re.split(r"[^a-z0-9]+", path.stem.lower()))
+    if subset:
+        names = {f"{subset}_{split}".lower()}
+        if subset.lower() == "realestate10k":
+            names.add(f"realstate10k_{split}")  # filename spelling reported by the user
+        dedicated = [path for path in matches if path.stem.lower() in names]
+        if dedicated:
+            matches = dedicated
     if len(matches) != 1:
         raise ValueError(f"Expected one {split} CSV under {root}, found {len(matches)}: "
                          f"{[str(p) for p in matches]}. Set data.{split}_csv explicitly.")

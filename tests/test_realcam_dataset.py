@@ -314,9 +314,10 @@ class RealCamTests(unittest.TestCase):
         self.assertEqual(sample["short_caption"], "room")
         self.assertEqual(float(sample["camera_scale"]), 3.5)
         self.assertEqual(float(sample["vtss_score"]), .75)
-        np.savez_compressed(self.root / "RealEstate10K_train.npz", np.array([], dtype=object))
-        with self.assertRaisesRegex(ValueError, "Multiple matching camera NPZs"):
-            self.inspect()
+        shutil.copyfile(self.root / "RealCam-Vid_train.npz", self.root / "RealEstate10K_train.npz")
+        self.inspect()
+        sources = json.loads((self.output / "metadata_sources.json").read_text())
+        self.assertEqual(sources["RealEstate10K_train.csv"]["official_camera_npz"]["path"], "RealEstate10K_train.npz")
 
     def test_directory_groups_do_not_relabel_original_sources_or_metadata_split(self):
         self.config.data.group_by = "source_or_directory"
