@@ -1,0 +1,66 @@
+# NVFPS is the user-provided LOCAL folder spelling; numeric format is NVFP4.
+# Original LongLive 2.0 sampling; no camera Adapter and no separate LoRA.
+# All relative paths are independent of terminal cwd.
+paths:
+  workspace_root: null  # auto: workspace/project/StreamAdapter -> workspace
+  data_root: public_data/RealCam-Vid
+  model_root: pretrained_model/LongLive
+base_model_dir: ../Wan2.2-TI2V-5B  # relative to paths.model_root
+
+model_kwargs:
+  model_name: Wan2.2-TI2V-5B
+  timestep_shift: 5.0
+  num_frame_per_block: 8
+  local_attn_size: 32
+
+i2v: true
+use_ema: false
+num_samples: 1
+num_output_frames: 32
+save_latents_only: false
+save_with_index: true
+inference_iter: -1
+merge_lora: false
+model_quant: true
+model_quant_use_transformer_engine: false
+model_quant_te_fallback_to_fouroversix: false
+model_quant_scale_rule: mse
+model_quant_activation_scale_rule: mse
+model_quant_weight_scale_rule: mse
+model_quant_gradient_scale_rule: mse
+fp8_quant: false
+torch_compile: false
+num_train_timestep: 1000
+
+data:
+  data_path: ${paths.data_root}/baseline_i2v  # first-frame images + matching prompt text
+  image_or_video_shape: [1, 32, 48, 44, 80]
+  chunks_per_shot: 0
+  scene_cut_prefix: "The scene transitions. "
+  allow_padding: false
+  min_latent_frames: 0
+  uniform_prompt: true
+  max_chunks_per_shot: 0
+
+inference:
+  sampling_steps: 4
+  independent_first_frame: true
+  sink_size: 8
+  guidance_scale: 1.0
+  multi_shot_sink: true
+  multi_shot_rope_offset: 8
+  kv_quant: true
+  kv_quant_scale_rule: mse
+  kv_quant_backend: cuda
+  streaming_vae: false
+  async_vae: false
+  vae_type: wan
+  vae_device: null
+  use_relative_rope: false
+  inference_t_scale: null
+
+checkpoints:
+  generator_ckpt: LongLive-2.0-5B-NVFPS-S4/model_4o6.pt  # relative to paths.model_root
+
+logging:
+  seed: 0

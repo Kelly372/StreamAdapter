@@ -93,6 +93,12 @@ class ProjectPathsTest(unittest.TestCase):
             self.assertEqual(config.sampling_steps, steps)
             self.assertIn(f"NVFPS-{suffix.upper()}", config.generator_ckpt)
             run_baseline.validate_baseline(config)
+            i2v_config = load_config(f"configs/baseline/longlive_nvfp4_{suffix}_i2v.yaml")
+            self.assertTrue(i2v_config.i2v)
+            self.assertTrue(i2v_config.independent_first_frame)
+            self.assertEqual(i2v_config.sampling_steps, steps)
+            self.assertEqual(i2v_config.generator_ckpt, config.generator_ckpt)
+            run_baseline.validate_baseline(i2v_config)
         config = load_config("configs/baseline/longlive_bf16_i2v.yaml")
         self.assertTrue(config.i2v)
         self.assertTrue(config.independent_first_frame)
@@ -119,17 +125,22 @@ class ProjectPathsTest(unittest.TestCase):
             self.assertTrue(any("generator_ckpt" in error for error in run_baseline.check_inputs(config)))
 
     def test_dry_run_records_without_gpu_and_no_overwrite(self):
-        source = str(REPO_ROOT / "configs/baseline/longlive_bf16.yaml")
         with tempfile.TemporaryDirectory() as directory:
             temp_repo = Path(directory)
-            argv = ["run_baseline.py", "--config", source, "--dry-run", "--run-name", "test-run"]
+            profile = Path("configs/baseline/longlive_bf16_i2v.yaml")
+            (temp_repo / profile).parent.mkdir(parents=True)
+            (temp_repo / profile).write_text((REPO_ROOT / profile).read_text(encoding="utf-8"), encoding="utf-8")
+            argv = ["run_baseline.py", "--dry-run", "--run-name", "test-run"]
             with patch.object(run_baseline, "REPO_ROOT", temp_repo), patch("sys.argv", argv), \
+                    patch.object(project_paths, "REPO_ROOT", temp_repo), \
                     patch.object(run_baseline, "environment_record", return_value={}), \
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(run_baseline.main(), 0)
                 folder = temp_repo / "output/test-run"
                 config = OmegaConf.load(folder / "resolved_config.yaml")
                 self.assertEqual(config.output_folder, str(folder))
+                self.assertTrue(config.i2v)
+                self.assertTrue(config.independent_first_frame)
                 self.assertEqual(json.loads((folder / "status.json").read_text())["status"], "dry_run")
                 self.assertTrue((folder / "inference.txt").is_file())
                 self.assertTrue((folder / "source_config.yaml").is_file())

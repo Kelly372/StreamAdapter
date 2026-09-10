@@ -56,7 +56,7 @@ def check_inputs(config):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default="configs/baseline/longlive_bf16.yaml")
+    parser.add_argument("--config", default="configs/baseline/longlive_bf16_i2v.yaml")
     add_path_arguments(parser)
     parser.add_argument("--run-name", help="Unique output subdirectory name; never overwrites an existing run")
     parser.add_argument("--tag", default="", help="Optional experiment label appended to the generated name")

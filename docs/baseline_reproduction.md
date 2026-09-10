@@ -1,6 +1,6 @@
 # 原版 LongLive 2.0 复现
 
-当前相机训练只完成方案配置与路径基础设施。请先通过本入口验证原版生成效果。入口使用原来的 `inference.py` 及采样算法，不加载相机 Adapter 或额外 LoRA。
+本项目的目标是 **I2V：首帧图像＋文本＋相机轨迹 → 受控视频**。当前相机训练只完成方案配置与路径基础设施。基础复现默认 I2V，先验证原版的首帧条件生成效果；相机轨迹与 Adapter 在后续步骤接入。入口使用原来的 `inference.py` 及采样算法，不加载相机 Adapter 或额外 LoRA。
 
 ## 目录
 
@@ -29,20 +29,22 @@ workspace/
 
 环境安装沿用 [getting_started.md](getting_started.md) 的对应 BF16 或 NVFP4 环境。`--dry-run`/`--check-only` 只依赖 Python 和项目已有的 OmegaConf；不导入 PyTorch，不检测显存/内核。正式推理需要完整 CUDA 依赖。
 
-## BF16：先检查，再生成
+## BF16 I2V：先检查，再生成
+
+先按下方“I2V 输入”准备首帧图片和同名文本，默认目录为 `workspace/public_data/RealCam-Vid/baseline_i2v/`。缺少输入时会停止，不会回退为 T2V。
 
 以下命令在仓库目录执行，PowerShell/Linux 都不需要 export。若从其他 cwd 启动，给 Python 的脚本参数使用脚本的实际位置；脚本内部路径仍按仓库/workspace 解析。
 
 ```text
 python run_baseline.py --dry-run
 python run_baseline.py --check-only
-python run_baseline.py --tag first-baseline
+python run_baseline.py --tag first-i2v
 ```
 
 - dry-run 即使发现缺失输入也会保存配置并返回成功，表示“完成配置检查”，不表示模型能运行。
 - check-only 发现缺失路径时返回非零；正式运行也会先检查并停止。
 - 正式运行以单进程单 GPU 为范围。不要用 torchrun 启动此 launcher；现有 SP 路径可直接使用 `inference_sp.py`，但此轮未接入其统一记录生命周期。
-- 默认使用示例文本、704×1280、32 latent（125 RGB）、4 步、seed=0、BF16；不启用编译或异步 VAE，不指定第二张 GPU。
+- 默认使用 `configs/baseline/longlive_bf16_i2v.yaml`，输入首帧与同名文本，704×1280、32 latent（125 RGB）、4 步、seed=0、BF16；不启用编译或异步 VAE，不指定第二张 GPU。
 - 两步权重不能通过把四步配置中的采样步数单独改为 2 来替代。
 
 显式指定 workspace（相对值以仓库为锚点）：
@@ -53,10 +55,10 @@ python run_baseline.py --workspace-root ../.. --check-only
 
 上例仅适用于标准的 `workspace/project/StreamAdapter` 布局。当前独立检出布局自动回退到仓库的父目录；可通过 `--workspace-root` 提供实际 workspace。
 
-使用自定义提示词（路径相对仓库；一行一个样本）：
+使用自定义 I2V 图片/提示词目录（路径相对仓库）：
 
 ```text
-python run_baseline.py --set data.data_path=example/my_prompts.txt --tag my-prompts
+python run_baseline.py --set data.data_path=example/my_i2v_inputs --tag my-i2v
 ```
 
 长视频测试需同时修改两个 latent 长度字段，避免噪声/输出不一致：
@@ -67,7 +69,7 @@ python run_baseline.py --set num_output_frames=128 --set "data.image_or_video_sh
 
 128 latent 对应 509 RGB 帧；长度必须满足每块 8 latent 的约束。
 
-## I2V 基线
+## I2V 输入
 
 本轮尚未实现 CSV 数据读取。先准备原版入口支持的图片与同名文本：
 
@@ -77,7 +79,7 @@ public_data/RealCam-Vid/baseline_i2v/
   sample_001.txt
 ```
 
-图片是首帧；文本是场景描述。此模式无相机数值控制。
+图片是首帧；文本是场景描述。此阶段无相机数值控制。若图片取自 RealEstate10K，原视频可作为人工对照，但当前入口不读取 GT 后续帧，也不会自动计算重建指标。
 
 ```text
 python run_baseline.py --config configs/baseline/longlive_bf16_i2v.yaml --check-only
@@ -91,24 +93,32 @@ python run_baseline.py --config configs/baseline/longlive_bf16_i2v.yaml --tag fi
 以下配置选择 FourOverSix 的 `model_4o6.pt`。需要对应 NVFP4 环境、GPU/内核支持；路径检查不验证这些条件。
 
 ```text
-python run_baseline.py --config configs/baseline/longlive_nvfp4_s4.yaml --check-only
-python run_baseline.py --config configs/baseline/longlive_nvfp4_s4.yaml --tag s4
-python run_baseline.py --config configs/baseline/longlive_nvfp4_s2.yaml --tag s2
+python run_baseline.py --config configs/baseline/longlive_nvfp4_s4_i2v.yaml --check-only
+python run_baseline.py --config configs/baseline/longlive_nvfp4_s4_i2v.yaml --tag s4-i2v
+python run_baseline.py --config configs/baseline/longlive_nvfp4_s2_i2v.yaml --tag s2-i2v
 ```
 
 若本地目录名为 `NVFP4`：
 
 ```text
-python run_baseline.py --config configs/baseline/longlive_nvfp4_s4.yaml --set checkpoints.generator_ckpt=LongLive-2.0-5B-NVFP4-S4/model_4o6.pt
+python run_baseline.py --config configs/baseline/longlive_nvfp4_s4_i2v.yaml --set checkpoints.generator_ckpt=LongLive-2.0-5B-NVFP4-S4/model_4o6.pt
 ```
 
 若下载的是 Transformer Engine 的 `model_te.pt`，需同时切换权重和后端，并安装对应 TE 环境：
 
 ```text
-python run_baseline.py --config configs/baseline/longlive_nvfp4_s4.yaml --set checkpoints.generator_ckpt=LongLive-2.0-5B-NVFPS-S4/model_te.pt --set model_quant_use_transformer_engine=true
+python run_baseline.py --config configs/baseline/longlive_nvfp4_s4_i2v.yaml --set checkpoints.generator_ckpt=LongLive-2.0-5B-NVFPS-S4/model_te.pt --set model_quant_use_transformer_engine=true
 ```
 
-NVFP4 I2V 可在相应 S4/S2 配置上同时覆盖三个字段：`i2v=true`、`inference.independent_first_frame=true`、`data.data_path=图片目录`。数值格式、采样步数、权重后端必须成套匹配。
+NVFP4 的 I2V 配置已设置首帧模式和图片目录。数值格式、采样步数、权重后端必须成套匹配。
+
+## 可选 T2V 对照
+
+原 T2V 配置保留供显式对照，不代表项目目标，也不验证首帧保持或相机控制。此前默认 `first-baseline` 生成的 T2V 视频属于这类对照。
+
+```text
+python run_baseline.py --config configs/baseline/longlive_bf16.yaml --tag t2v-control
+```
 
 ## 路径规则与记录
 
@@ -123,7 +133,7 @@ NVFP4 I2V 可在相应 S4/S2 配置上同时覆盖三个字段：`i2v=true`、`i
 
 输入配置可包含 `${paths.repo_root}`、`${paths.data_root}`、`${paths.model_root}`。绝对路径也可覆盖，但迁移时应使用原始相对配置重新运行，不直接复用旧机器的 `resolved_config.yaml`。
 
-每次运行生成可区分的名称，例如 `baseline_t2v_longlive2_bf16_s4_f32_seed0_<时间>_<tag>`。也可使用 `--run-name`；已存在的同名目录会报错，不覆盖。
+每次运行生成可区分的名称，例如 `baseline_i2v_longlive2_bf16_s4_f32_seed0_<时间>_<tag>`。也可使用 `--run-name`；已存在的同名目录会报错，不覆盖。
 
 结果目录保存：
 

@@ -4,6 +4,8 @@
 
 ## 全局约定
 
+- **项目目标固定为 I2V：首帧图像＋文本＋相机轨迹 → 受控视频。基础复现也默认 I2V；T2V 仅作可选对照。**
+
 - 目标目录：`workspace/project/StreamAdapter`。当前本地检出的目录名可以不同。
 - 数据：`workspace/public_data/RealCam-Vid` 中的 RealEstate10K；元数据为 train/test CSV。
 - Wan2.2 基础组件：`workspace/pretrained_model/Wan2.2-TI2V-5B`。
@@ -52,7 +54,7 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - [x] 数据根目录与基础组件/蒸馏权重路径分离。
 - [x] 主干、文本编码器、Tokenizer、VAE 路径接入；旧配置组件默认值锚定仓库。
 - [x] train/inference/inference_sp 支持 `--set KEY=VALUE` 和 workspace 覆盖。
-- [x] 提供原版 BF16 T2V/I2V、NVFP4 S4/S2 复现配置与 `run_baseline.py`。
+- [x] 提供原版 BF16 I2V、NVFP4 S4/S2 I2V 复现配置与默认 I2V 的 `run_baseline.py`；保留显式 T2V 对照。
 - [x] 复现入口启动前检查文件，支持无 GPU 的 dry-run/check-only。
 - [x] 复现结果存入 `output/<run_name>/`，同名运行拒绝覆盖，并保存参数/状态。
 - [ ] 在用户实际模型和 CUDA 环境执行基础模型推理，确认视频输出。
@@ -152,3 +154,11 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - CPU 测试入口：`python -m unittest discover -s tests -p test_project_paths.py -v`。本机临时配置依赖置于忽略目录 `output/verification_step01_02/deps`，没有修改项目依赖清单。
 - 限制：当前检出目录没有用户的模型和数据；本机测试 Python 未安装 PyTorch，尚未进行 GPU 视频生成。CPU dry-run 不等同于复现成功。
 - 下一步：用户验证原版 LongLive 2.0 后，再实施 CSV 接入；相机模型、损失和训练器保持待实现。
+
+### 2026-09-10：明确 I2V 目标并纠正默认复现模式
+
+- 用户明确项目 pipeline 为 I2V。此前默认 T2V 不符合该目标；已经生成的 `first-baseline` T2V 视频仅为基础文生视频对照，无对应 GT 或参考首帧。
+- 将 launcher 默认配置改为 `configs/baseline/longlive_bf16_i2v.yaml`；新增 S4/S2 的 I2V 独立配置，并同步 README/复现说明。
+- 当前 I2V 基线输入首帧和同名文本，沿用现有首帧 latent 固定逻辑；相机轨迹、CSV/GT 视频和控制训练仍未接入。
+- 基础模型 I2V 复现与最终“首帧＋相机轨迹”的受控 I2V 分阶段验证，不能将前者视为已实现相机控制。
+- 验证：13 项 CPU 测试通过，包含无 `--config` 时默认 I2V、首帧模式及 S4/S2 I2V 权重/步数匹配；21 份 YAML 解析/重载通过，`git diff --check` 通过。结果保存于 `output/verification_i2v_default/verification.txt`。GPU 推理未执行。
