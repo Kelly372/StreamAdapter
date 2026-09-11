@@ -56,6 +56,29 @@ CSV 没有相机列时，优先选择数据根目录下的 `RealEstate10K_<split
 
 ## 第 3A 步：预先分离 RealEstate10K NPZ
 
+### 先查看原始 NPZ（不筛选、不分离）
+
+```bash
+python extract_realestate10k.py --inspect-only
+```
+
+此模式默认只加载数据根目录中的 `RealCam-Vid_test.npz`，打印前 3 条记录的路径/数组形状，以及全表数据来源、路径前缀统计。保留原文件所有子集、字段、顺序、路径和数组数值，不读取 CSV 或视频，也不修改 NPZ。
+
+可用 `--test-npz <文件路径>` 覆盖输入；相对路径基于数据根目录。`--preview-count 10` 控制终端摘要和展开预览的条数，不限制完整导出的记录数量。查看两份归档可加 `--splits train test`。路径配置方式与原提取命令相同。
+
+结果位于 `output/metadata_readable_test_<时间>_<tag>/`（未设置 tag 时省略该后缀），其中 `test/` 包含：
+
+| 文件 | 用途 |
+| --- | --- |
+| summary.txt / summary.json | 全表数量、dataset_source 分布、路径前缀分布、各字段类型及数组形状/dtype 统计 |
+| index.jsonl | 每行一条记录，列出原始序号、来源、完整路径、数组形状，适合搜索视频路径 |
+| preview.json | 前若干条完整记录，缩进展开，适合在编辑器中人工查看相机矩阵 |
+| records.jsonl | 所有记录的全部字段和数组数值，每行一条，无省略号截断；文件可能较大 |
+
+数组表示为 `{"__ndarray__": true, "dtype": "float64", "shape": [F,4,4], "values": [...]}`；特殊 NaN/Infinity 使用显式标记对象，保证标准 JSON 可读。此格式用于人工查看，不替代原 NPZ。输出根目录保留 extraction.txt、parameters.json、launch.json、summary.json、status.json；`status=completed` 表示导出完成，不表示第三步的数据检查通过。原有不带 `--inspect-only` 的子集提取行为不变。
+
+### 临时匹配诊断
+
 遇到 `missing_camera_metadata` 时，可先运行临时只读诊断（不是第三步的替代）：
 
 ```bash
@@ -71,6 +94,8 @@ python diagnose_realcam_temp.py --audit-dir output/realestate10k_audit_smoke_v2 
 服务器问题定位并验证后，可删除 `diagnose_realcam_temp.py`、`tests/test_diagnose_realcam_temp.py` 和本段临时说明；生产入口不依赖该脚本。
 
 相机按完整、规范化后的相对 `video_path` 精确匹配，不按行号或视频文件名匹配，不自动替换路径中的 train/test。匹配失败时 `rejected.csv` 同时记录该路径、输入 CSV、所选 NPZ 和实际视频文件路径。目录或字段名适配不能补齐 NPZ 中确实缺失的条目。更新输入 CSV/NPZ 或选择规则后应重新运行第 3 步，并以新清单重建第 4 步窗口索引。
+
+### 分离子集 NPZ
 
 脚本 `extract_realestate10k.py` 可将两份总 NPZ 分离为 RealEstate10K 专用 NPZ。它只依据 `dataset_source=RealEstate10K` 筛选，不根据视频路径里的 train/test 重新划分，也不依据 CSV 删行；每条记录的全部字段、数组 dtype/形状/内容和相对顺序保持不变。
 

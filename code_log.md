@@ -88,6 +88,8 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 
 #### 3A. 预先分离 RealEstate10K 相机 NPZ — 已实现
 
+- [x] 新增 `--inspect-only` 原始 NPZ 查看模式，默认仅查看 test；不筛选子集，导出完整 JSONL、精简路径索引、展开预览与字段/来源统计，供人工核对。
+
 - [x] 新增 `extract_realestate10k.py`，从 `RealCam-Vid_train/test.npz` 按 dataset_source 分离 `RealEstate10K_train/test.npz`，支持分别指定源文件或只处理一个 split。
 - [x] 保持源 NPZ 的 train/test 归属和条目顺序，不依据视频目录名重新划分，不改变任何字段或相机数组。
 - [x] 输出保存于仓库 `output/<run_name>/`，含 extraction.txt、全部参数、环境、输入输出哈希、数量统计、状态；不覆盖输入和已有结果。
@@ -268,3 +270,13 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 使用：`python diagnose_realcam_temp.py --audit-dir output/realestate10k_audit_smoke_v2 --splits test --limit 10`。如输出目录已移动或配置需调整，传 --workspace-root / --set 覆盖；若显式指定新相机目录则检查该新目录。
 - 验证：4 项临时诊断测试通过，2 个新增 Python 文件语法检查通过；覆盖正常匹配、重复运行/原文件不变、所选子集缺条目但总表精确匹配、路径前缀不同、旧拒绝路径优先、旧实际 NPZ 选择、缺失输入的失败记录。参数及测试记录：`output/verification_diagnose_temp_20260910-205932/`。
 - 脚本为临时分支工具；服务器定位并完成第三步验证后，可删除该脚本、`tests/test_diagnose_realcam_temp.py` 及 docs/realcam_csv.md 的临时说明，保留本日志作为追踪记录。生产加载器不依赖临时脚本。
+
+### 2026-09-11：第 3A 步增加原始 NPZ 可读导出
+
+- `extract_realestate10k.py --inspect-only` 默认只读取 `RealCam-Vid_test.npz`；可用 --test-npz、--splits、--workspace-root、--data-root 覆盖。未启用该模式时，原双 split 子集提取行为不变。
+- 新增 `utils/realcam_readable.py`，复用受限 NPZ 读取器，将全表所有字段及数组数值按原顺序写入 records.jsonl；index.jsonl 仅保留序号、来源、路径和数组形状/dtype，preview.json 展开前若干条完整记录。--preview-count 默认 3，只控制终端摘要和预览数量，不截断完整导出。
+- summary.txt/json 汇总总数量、dataset_source、路径前缀、字段类型及数组形状/dtype；终端仅打印前 10 种主要路径前缀，全部计数保存在文件中。数组包含 dtype、shape、values；NaN/Infinity 使用显式标记对象，元组转为列表。该 JSON 格式供人工检查，不作为替代 NPZ 的训练输入。
+- 输出使用独立 output/metadata_readable_* 目录，含全部参数、extraction.txt、环境、状态及输入 SHA256；导出前后校验原 NPZ 哈希不变。不筛选 RealEstate10K、不改写路径或划分、不读取视频/CSV，也不推进下一阶段检查。
+- 已对本地真实 `E:/codexspace/RealCam-Vid_test.npz` 执行：5,000 条全部导出，RealEstate10K 2,152、MiraData9K 1,895、DL3DV-10K 953。RealEstate10K 路径前缀 train 1,932 / test 220；该统计只描述路径，不能视为归档划分。
+- 实际结果及参数：`output/metadata_readable_test_20260911-092713-881116_local-readable/`，完整 records.jsonl 为 152,688,787 字节。验证两个 JSONL 均为 5,000 行、预览 3 条，首条外参形状为 [92,4,4]。
+- 6 项相关测试通过、无跳过，覆盖原提取流程、只读模式默认 test、全子集/全字段保留、数组 dtype/形状/数值、NaN 标记、预览数量及原文件不变；3 个相关 Python 文件语法检查通过。验证记录为上述目录 verification.txt、verification_tests.txt。GPU 和服务器真实 CSV/视频未测试。

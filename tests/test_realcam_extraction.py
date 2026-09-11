@@ -1,5 +1,7 @@
 """Step 3A: preserve metadata exactly, then feed subset NPZs into inspection."""
 import csv
+from contextlib import redirect_stdout
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -66,6 +68,37 @@ class ExtractionTests(unittest.TestCase):
         np.savez(path, np.array([self.entries("train")[0]], dtype=object))
         with self.assertRaisesRegex(ValueError, "No RealEstate10K"):
             extraction.extract_split(path, self.root / "empty.npz", self.data)
+
+    def test_inspect_only_defaults_to_test_and_exports_all_fields_without_filtering(self):
+        source = self.make_input("test")
+        before = sha256_file(source)
+        console = io.StringIO()
+        repo = self.root / "repo"
+        with patch.object(extraction, "REPO_ROOT", repo), redirect_stdout(console):
+            self.assertEqual(extraction.main(["--inspect-only", "--workspace-root", str(self.root),
+                                             "--preview-count", "2", "--run-name", "readable"]), 0)
+        folder = repo / "output/readable"
+        records = [json.loads(line) for line in (folder / "test/records.jsonl").read_text().splitlines()]
+        self.assertEqual([row["metadata"]["dataset_source"] for row in records], ["DL3DV", "RealEstate10K", "MiraData"])
+        self.assertEqual([row["index"] for row in records], [0, 1, 2])
+        for raw, restored in zip(self.entries("test"), records):
+            restored = restored["metadata"]
+            self.assertEqual(set(raw), set(restored))
+            self.assertEqual(restored["video_path"], raw["video_path"])
+            for key in ("camera_intrinsics", "camera_extrinsics"):
+                self.assertEqual(restored[key]["dtype"], str(raw[key].dtype))
+                self.assertEqual(restored[key]["shape"], list(raw[key].shape))
+                np.testing.assert_array_equal(restored[key]["values"], raw[key])
+            self.assertEqual(restored["extra"]["preserve"][-1], {"__nonfinite_float__": "NaN"})
+        self.assertEqual(len(json.loads((folder / "test/preview.json").read_text())), 2)
+        self.assertEqual(len((folder / "test/index.jsonl").read_text().splitlines()), 3)
+        self.assertEqual(sha256_file(source), before)
+        self.assertFalse((folder / "RealEstate10K_test.npz").exists())
+        self.assertNotIn("Next: python inspect_realcam.py", console.getvalue())
+        summary = json.loads((folder / "test/summary.json").read_text())
+        self.assertEqual(summary["path_prefix_counts"]["RealEstate10K/train"], 1)
+        self.assertTrue(summary["all_records_exported"])
+        self.assertFalse(summary["filtered"])
 
     def test_csv_subset_preference_and_ambiguous_subset_files(self):
         for name in ("RealCam-Vid_test.csv", "RealState10K_test.csv"):

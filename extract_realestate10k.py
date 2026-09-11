@@ -11,6 +11,7 @@ import numpy as np
 from utils.project_paths import REPO_ROOT, resolve_path, workspace_root
 from utils.realcam_dataset import load_official_camera_index, sha256_file
 from utils.run_record import environment_record, write_json
+from utils.realcam_readable import export_readable_npz
 
 
 def metadata_equal(left, right):
@@ -64,15 +65,21 @@ def main(argv=None):
     parser.add_argument("--data-root", default="public_data/RealCam-Vid", help="Relative to workspace")
     parser.add_argument("--train-npz", default="RealCam-Vid_train.npz", help="Relative to data root, or absolute")
     parser.add_argument("--test-npz", default="RealCam-Vid_test.npz", help="Relative to data root, or absolute")
-    parser.add_argument("--splits", nargs="+", choices=("train", "test"), default=["train", "test"])
+    parser.add_argument("--splits", nargs="+", choices=("train", "test"), help="Default: both for extraction; test for --inspect-only")
+    parser.add_argument("--inspect-only", action="store_true", help="Export all NPZ records as readable JSON instead of extracting a subset")
+    parser.add_argument("--preview-count", type=int, default=3, help="Records printed as summaries and included in pretty preview.json; all records still exported")
     parser.add_argument("--run-name", help="Unique repository output subdirectory; no overwriting")
     parser.add_argument("--tag", default="")
     args = parser.parse_args(argv)
+    args.splits = args.splits or (["test"] if args.inspect_only else ["train", "test"])
+    if args.preview_count < 0:
+        parser.error("--preview-count must be nonnegative")
     if len(set(args.splits)) != len(args.splits):
         raise ValueError("--splits must not contain duplicates")
     root = workspace_root(args.workspace_root)
     data_root = resolve_path(args.data_root, root)
-    name = args.run_name or (f"metadata_realestate10k_{'-'.join(args.splits)}_{datetime.now():%Y%m%d-%H%M%S-%f}" +
+    prefix = "metadata_readable" if args.inspect_only else "metadata_realestate10k"
+    name = args.run_name or (f"{prefix}_{'-'.join(args.splits)}_{datetime.now():%Y%m%d-%H%M%S-%f}" +
                              (f"_{args.tag}" if args.tag else ""))
     reserved = {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}
     if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,179}", name) or name.endswith(".")
@@ -83,11 +90,13 @@ def main(argv=None):
     inputs = {split: resolve_path(getattr(args, f"{split}_npz"), data_root) for split in args.splits}
     parameters = {"arguments": vars(args), "workspace_root": str(root), "data_root": str(data_root),
                   "inputs": {key: str(value) for key, value in inputs.items()}, "output_folder": str(folder),
-                  "subset": "RealEstate10K", "filter_field": "dataset_source", "compressed": True,
-                  "verify_roundtrip": True, "change_camera_coordinates": False, "change_split": False}
+                  "mode": "readable_inspection" if args.inspect_only else "subset_extraction",
+                  "subset": None if args.inspect_only else "RealEstate10K",
+                  "filter_field": None if args.inspect_only else "dataset_source", "compressed": not args.inspect_only,
+                  "verify_roundtrip": not args.inspect_only, "change_camera_coordinates": False, "change_split": False}
     write_json(folder / "parameters.json", parameters)
     write_json(folder / "launch.json", {"argv": sys.argv if argv is None else argv, "environment": environment_record()})
-    (folder / "extraction.txt").write_text("RealEstate10K metadata extraction (step 3A)\n\n" +
+    (folder / "extraction.txt").write_text("RealCam metadata (step 3A): " + parameters["mode"] + "\n\n" +
                                          json.dumps(parameters, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Run directory: {folder}", flush=True)
     write_json(folder / "status.json", {"status": "running"})
@@ -98,13 +107,17 @@ def main(argv=None):
                 raise FileNotFoundError(f"Input NPZ not found: {path}")
         for split, path in inputs.items():
             print(f"[{split}] reading {path.name}", flush=True)
-            summaries[split] = extract_split(path, folder / f"RealEstate10K_{split}.npz", data_root)
+            if args.inspect_only:
+                summaries[split] = export_readable_npz(path, folder / split, data_root, preview_count=args.preview_count)
+            else:
+                summaries[split] = extract_split(path, folder / f"RealEstate10K_{split}.npz", data_root)
             write_json(folder / "summary.json", summaries)
-            print(f"[{split}] selected {summaries[split]['selected_entries']}/{summaries[split]['input_entries']}; roundtrip verified", flush=True)
+            if not args.inspect_only:
+                print(f"[{split}] selected {summaries[split]['selected_entries']}/{summaries[split]['input_entries']}; roundtrip verified", flush=True)
         write_json(folder / "status.json", {"status": "completed", "returncode": 0, "splits": args.splits})
         with (folder / "extraction.txt").open("a", encoding="utf-8") as handle:
             handle.write("\n\nResults:\n" + json.dumps(summaries, ensure_ascii=False, indent=2))
-        if set(args.splits) == {"train", "test"}:
+        if not args.inspect_only and set(args.splits) == {"train", "test"}:
             print(f"Next: python inspect_realcam.py --camera-metadata-dir output/{name} --limit 10 --tag subset-smoke", flush=True)
         return 0
     except (Exception, KeyboardInterrupt) as exc:
