@@ -324,3 +324,11 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 删除临时 diagnose_realcam_temp.py、tests/test_diagnose_realcam_temp.py 和不再需要的 collect_baseline_references.py，清理对应活动文档/测试；保留历史日志。保留数据构建工具和原独立阶段入口作为底层与专项工具，新主流程不再依赖这些旧命令的串联或旧输出。
 - README 改为两条命令；新增 docs/realestate10k_validation.md，其他专项文档注明主入口。未删除本地或服务器 output，未修改数据集文件。重跑使用新 run-name；迁移机器后从准备命令开始重建解析路径和缓存。
 - 验证：69 项 CPU 测试全部通过、无跳过，178 个 Python 文件语法检查及 git diff --check 通过。新增空 output + 已构建 CSV/NPZ 的实际合成视频解码/窗口/GT 集成测试，覆盖一目录组织、唯一后续命令、125 帧 GT、原数据未变、候选不足、缺 NPZ 不回退、输入变更阻断；推理派发与完成统计使用 mock，未运行 GPU。记录：`output/verification_unified_validation_20260911-153924/`（parameters.json、tests.txt、summary.json）。真实服务器视觉运动问题仍待用户对照 GT 检查。
+
+### 2026-09-11：细化 no_valid_window 的拒绝诊断
+
+- 用户服务器结果为检查 train=46/validation=4/test=50、数据拒绝 0，test 窗口可用 8、拒绝 42，全部旧原因为 no_valid_window。该总类不足以判断实际根因，不能直接认定为切镜误报、低 FPS 或视频时长不足。
+- 保留 no_valid_window 总类，逐条 rejected.json 增加 window_diagnostics，包含源帧数/时间跨度/时间戳平均 FPS、目标帧数/跨度/容差、切镜与大间隙位置、无效位姿帧数、有效连续段数量和最长长度。
+- summary.json 增加 window_rejection_causes 并在终端打印，区分源帧不足、时长不足、唯一帧/时间采样失败、切镜、时间间隙、无效位姿或多约束共同导致不可用；原因可重叠。诊断仅在原采样失败后做假设检验，不向实际采样提供放宽后的索引，不修改帧数、FPS、时间容差或切镜阈值。
+- 所有新增内容写入现有 records/windows/summary.json 和 rejected.json，顶层 summary 同步包含窗口摘要，不新增独立诊断工具或验证结果目录。旧运行没有这些信息，需要更新后新运行生成；实际 42 条原因仍待服务器结果。
+- 验证：20 项窗口与统一入口 CPU 测试通过，无跳过；覆盖 120 帧/24 FPS、125 帧/30 FPS、低 FPS 唯一帧采样、切镜、间隙、无效位姿、组合约束，并确认诊断前后实际候选仍为空；短视频端到端拒绝记录及汇总字段验证通过。参数和结果：output/verification_window_diagnostics_20260911-164048/。相关 Python 语法及 git diff --check 通过，未运行服务器真实数据/GPU。

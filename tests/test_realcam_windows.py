@@ -19,7 +19,7 @@ from utils.realcam_dataset import probe_video
 from utils.realcam_inspection import inspect_dataset
 from utils.realcam_windows import (
     RealCamWindowDataset, build_window_index, decode_window, feasible_starts, scan_video,
-    spatial_transform, transform_intrinsics, valid_segments, validate_settings, window_indices,
+    spatial_transform, transform_intrinsics, valid_segments, validate_settings, window_indices, explain_window_rejection,
 )
 
 
@@ -365,6 +365,32 @@ class WindowTests(unittest.TestCase):
         summary = json.loads((folder / "summary.json").read_text())
         self.assertFalse(summary["all_manifest_samples_inspected"])
         self.assertEqual(summary["usable_clips"], 0)
+        self.assertEqual(summary["window_rejection_causes"], {"too_few_source_frames": 1, "insufficient_source_duration": 1})
+        rejection = json.loads((folder / "rejected.json").read_text())[0]
+        self.assertEqual(rejection["reason"], "no_valid_window")
+        self.assertEqual(rejection["window_diagnostics"]["source_frames"], 60)
+
+    def test_rejection_diagnostics_distinguish_sampling_and_segment_constraints(self):
+        cases = [
+            (np.arange(120) / 24., [], [], {}, {"too_few_source_frames", "insufficient_source_duration"}),
+            (np.arange(125) / 30., [], [], {}, {"insufficient_source_duration"}),
+            (np.arange(200) / 15., [], [], {}, {"unique_frame_or_timestamp_sampling"}),
+            (np.arange(200) / 24., [100], [], {}, {"shot_boundaries"}),
+            (np.arange(200) / 24., [], [100], {}, {"invalid_poses"}),
+            (np.arange(200) / 24., [], [], {"max_frame_gap_seconds": .03}, {"timestamp_gaps"}),
+            (np.arange(200) / 24., [100], [50, 150], {}, {"combined_pose_cut_gap_constraints"}),
+        ]
+        for times, cuts, invalid, overrides, expected in cases:
+            with self.subTest(expected=expected):
+                settings = dict(self.settings, **overrides)
+                mask = np.ones(len(times), dtype=bool)
+                mask[invalid] = False
+                starts, segments = feasible_starts(times, mask, cuts, settings)
+                self.assertEqual(len(starts), 0)
+                report = explain_window_rejection(times, mask, cuts, settings, segments)
+                self.assertEqual(set(report["causes"]), expected)
+                self.assertEqual(settings, dict(self.settings, **overrides))
+                self.assertEqual(len(feasible_starts(times, mask, cuts, settings)[0]), 0)
 
 
 if __name__ == "__main__":

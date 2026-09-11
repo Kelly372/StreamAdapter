@@ -140,6 +140,58 @@ def feasible_starts(timestamps, valid_mask, cuts, settings):
     return np.asarray(starts, dtype=np.int64), segments
 
 
+def explain_window_rejection(timestamps, valid_mask, cuts, settings, segments):
+    """Report failed constraints without relaxing production window selection."""
+    times = np.asarray(timestamps)
+    mask = np.asarray(valid_mask, dtype=bool)
+    required = settings["rgb_frames"]
+    duration = (required - 1) / settings["target_fps"]
+    tolerance = settings["max_time_error_seconds"] + 1e-9
+    lengths = [end - begin for begin, end in segments]
+    spans = [float(times[end - 1] - times[begin]) for begin, end in segments]
+    gap_indices = (np.flatnonzero(np.diff(times) > settings["max_frame_gap_seconds"] + 1e-9) + 1).tolist()
+    result = {"required_frames": required, "target_fps": settings["target_fps"],
+              "required_timestamp_span_seconds": duration, "source_frames": len(times),
+              "source_timestamp_span_seconds": float(times[-1] - times[0]),
+              "source_average_fps_from_timestamps": float((len(times) - 1) / (times[-1] - times[0])),
+              "max_time_error_seconds": settings["max_time_error_seconds"],
+              "max_frame_gap_seconds": settings["max_frame_gap_seconds"],
+              "cut_count": len(cuts), "cut_frame_indices": list(cuts),
+              "gap_count": len(gap_indices), "gap_frame_indices": gap_indices,
+              "invalid_pose_frames": int((~mask).sum()), "segment_count": len(segments),
+              "longest_segment_frames": max(lengths, default=0),
+              "longest_segment_span_seconds": max(spans, default=0.),
+              "segments_meeting_frame_and_span_requirements": sum(
+                  n >= required and span + tolerance >= duration for n, span in zip(lengths, spans)),
+              "causes": [], "diagnostic_only": True}
+    if len(times) < required:
+        result["causes"].append("too_few_source_frames")
+    if times[-1] - times[0] + tolerance < duration:
+        result["causes"].append("insufficient_source_duration")
+    if result["causes"]:
+        return result
+    # These counterfactuals describe which restrictions block a window; they never
+    # provide indices to the actual sampler or label detected cuts as incorrect.
+    no_gaps = dict(settings, max_frame_gap_seconds=float("inf"))
+    all_valid = np.ones_like(mask)
+    raw_possible = bool(len(feasible_starts(times, all_valid, [], no_gaps)[0]))
+    result["possible_without_pose_cut_gap_constraints"] = raw_possible
+    if not raw_possible:
+        result["causes"].append("unique_frame_or_timestamp_sampling")
+        return result
+    trials = (("shot_boundaries", mask, [], settings, bool(cuts)),
+              ("timestamp_gaps", mask, cuts, no_gaps, bool(gap_indices)),
+              ("invalid_poses", all_valid, cuts, settings, not mask.all()))
+    for cause, trial_mask, trial_cuts, trial_settings, relevant in trials:
+        possible = bool(len(feasible_starts(times, trial_mask, trial_cuts, trial_settings)[0])) if relevant else False
+        result[f"possible_without_{cause}"] = possible
+        if possible:
+            result["causes"].append(cause)
+    if not result["causes"]:
+        result["causes"].append("combined_pose_cut_gap_constraints")
+    return result
+
+
 def spatial_transform(width, height, settings, rng):
     target_w, target_h = settings["width"], settings["height"]
     if settings["resize_mode"] == "stretch":
@@ -222,6 +274,7 @@ def build_window_index(manifest, data_root, output, settings, *, seed=0, limit=0
     count = min(len(dataset), limit) if limit else len(dataset)
     for index in range(count):
         raw = dataset.records[index]
+        window_diagnostics = None
         try:
             sample = dataset[index]
             path = Path(sample["video_path"])
@@ -243,7 +296,8 @@ def build_window_index(manifest, data_root, output, settings, *, seed=0, limit=0
             cuts = sorted(set(timeline["detected_cuts"]) | set(validate_cuts([] if annotated is None else annotated, len(times))))
             starts, segments = feasible_starts(times, sample["valid_mask"], cuts, settings)
             if not len(starts):
-                raise MetadataError("no_valid_window", "No unique-frame window meets duration, timing, pose validity and shot/gap constraints")
+                window_diagnostics = explain_window_rejection(times, sample["valid_mask"], cuts, settings, segments)
+                raise MetadataError("no_valid_window", ", ".join(window_diagnostics["causes"]))
             if sha256_file(path) != video_hash:
                 raise MetadataError("video_changed_during_scan", raw["video_path"])
             filename = f"timelines/{raw['sample_id']}.npz"
@@ -258,6 +312,8 @@ def build_window_index(manifest, data_root, output, settings, *, seed=0, limit=0
         except (OSError, ValueError, EOFError) as exc:
             rejected.append({"metadata_index": index, "sample_id": raw["sample_id"], "video_path": raw["video_path"],
                              "reason": exc.code if isinstance(exc, MetadataError) else type(exc).__name__, "detail": str(exc)})
+            if window_diagnostics is not None:
+                rejected[-1]["window_diagnostics"] = window_diagnostics
         if (index + 1) % 25 == 0:
             print(f"Window scan: {index + 1}/{count}; usable={len(accepted)}", flush=True)
     if sha256_file(manifest) != original_manifest_hash or sha256_file(source_file) != original_sources_hash:

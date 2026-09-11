@@ -122,6 +122,8 @@ def main(argv=None, *, output_dir=None, show_next=True):
         summary = {"input_samples": index["input_samples"], "inspected_samples": index["inspected_samples"],
                    "usable_clips": len(index["records"]), "feasible_windows": sum(row["feasible_windows"] for row in index["records"]),
                    "rejected_samples": len(index["rejected"]), "rejection_reasons": dict(Counter(row["reason"] for row in index["rejected"])),
+                   "window_rejection_causes": dict(Counter(cause for row in index["rejected"]
+                       for cause in row.get("window_diagnostics", {}).get("causes", []))),
                    "exported_samples": 0, "requested_exports": int(config.export.count),
                    "export_shortfall": max(0, int(config.export.count) - len(index["records"])),
                    "all_manifest_samples_inspected": index["input_samples"] == index["inspected_samples"],
@@ -129,6 +131,8 @@ def main(argv=None, *, output_dir=None, show_next=True):
                    "shot_detection_limitation": index["shot_detection_limitation"]}
         write_json(folder / "summary.json", summary)
         write_json(folder / "rejected.json", index["rejected"])
+        if summary["window_rejection_causes"]:
+            print(f"Window rejection causes (can overlap): {summary['window_rejection_causes']}", flush=True)
         if not index["records"]:
             raise ValueError("No usable windows; see rejected.json and timing/shot settings")
         dataset = RealCamWindowDataset(folder / "window_index.json", config.paths.data_root)

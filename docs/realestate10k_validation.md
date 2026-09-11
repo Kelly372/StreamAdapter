@@ -66,6 +66,20 @@ GT 为裁剪、重采样后同一段窗口的有损视频预览，不是整个�
 
 records 保留复现和后续训练接口需要的数据，不必逐个打开。检查失败时，先看顶层 summary.json 的 error，再按提示查看对应 records 子目录中的拒绝记录。
 
+窗口失败的 `no_valid_window` 是总类，具体原因见 `records/windows/summary.json` 的 `window_rejection_causes`（顶层 summary.json 的 windows 中也有），终端会直接打印。每条 `records/windows/rejected.json` 中的 window_diagnostics 记录源帧数、时间跨度、目标要求、切镜/时间间隙位置、无效位姿数和最长连续段：
+
+| 具体原因 | 含义 |
+| --- | --- |
+| too_few_source_frames | 源帧数小于目标帧数，不能用重复帧补足 |
+| insufficient_source_duration | 首末帧时间跨度不足；默认要求约 5.167 秒并考虑原有时间容差 |
+| unique_frame_or_timestamp_sampling | 即使暂不考虑位姿/切镜/间隙约束，也无法按目标时间选择足够的不同帧 |
+| shot_boundaries | 仅移除切镜边界约束就能找到窗口；不代表切镜检测一定误报 |
+| timestamp_gaps | 仅移除最大时间间隙分段约束就能找到窗口 |
+| invalid_poses | 仅移除无效位姿分段约束就能找到窗口 |
+| combined_pose_cut_gap_constraints | 需同时移除多类分段约束才有窗口 |
+
+统计原因可以重叠，不应直接相加当作拒绝视频数。诊断中的假设检查不会放宽实际采样、采用假设窗口或关闭切镜检测。旧版本的结果不包含这些细节，需要更新后在新验证中生成。
+
 ## 调整样本数或重跑
 
 不足 10 个可用片段时仍保留已找到的 GT，并标记 preparation_failed，不重复凑数、不提示推理。扩大候选数量并使用新的名称：
