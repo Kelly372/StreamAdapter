@@ -5,6 +5,15 @@ from pathlib import Path, PureWindowsPath
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def stage_output_dir(value, repo_root=REPO_ROOT):
+    """Keep grouped validation artifacts inside repository output/."""
+    folder = resolve_path(value, repo_root)
+    root = (Path(repo_root) / "output").resolve()
+    if folder == root or not folder.is_relative_to(root):
+        raise ValueError("Stage output must be a subdirectory of repository output/")
+    return folder
+
+
 def resolve_path(value, base):
     """Accept portable slash/backslash relatives and native absolute paths."""
     raw = str(value)

@@ -1,5 +1,7 @@
 # RealEstate10K CSV 接入与检查（第 3 阶段）
 
+当前已完成数据构建和第二步验证的主流程请使用 [第三步统一验证](realestate10k_validation.md)。本文保留底层工具与专项操作说明，不需要逐项重新执行。
+
 本阶段读取 RealCam-Vid 的 train/test CSV，筛选 RealEstate10K，检查视频与相机标注，生成可迁移的样本清单。原视频和元数据不改写；不加载 LongLive、不开启训练。第 4 阶段通过 `prepare_realcam_windows.py` 实现 24 FPS / 125 RGB 连续窗口、首帧提取和几何同步。
 
 当前数据根目录为 `workspace/public_data/RealCam-Vid/RealEstate10K`。用户手动整理 train/test CSV 并将 video_path 改为 `train/<目录>/<视频>.mp4` 或 `test/<目录>/<视频>.mp4`；代码不修改 CSV。字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均使用 `dataset_source=RealEstate10K`；`data_source` 仅为兼容别名。上一级视频目录只作为相似场景分组，不视为已验证的原始视频 ID。
@@ -25,7 +27,7 @@ workspace/public_data/RealCam-Vid/
 
 ## 运行
 
-第 3 步成功（退出码 0）后，在常规摘要末尾打印第 4 步命令，自动引用本次 `output/<run_name>/train.csv`，默认 `--limit 10 --export-count 2`。例如 `realestate10k_audit_smoke_v2` 会建议输出到 `realestate10k_windows_smoke_v2`；已有同名目录时自动追加编号。非默认数据根目录、workspace、seed、目标帧数/FPS 会传给下一步。失败时不打印继续命令。
+第 3 步成功（退出码 0）后，在常规摘要末尾打印第 4 步命令，自动引用本次 `output/<run_name>/train.csv`，默认 `--limit 50 --export-count 10`。例如 `realestate10k_audit_smoke_v2` 会建议输出到 `realestate10k_windows_smoke_v2`；已有同名目录时自动追加编号。非默认数据根目录、workspace、seed、目标帧数/FPS 会传给下一步。失败时不打印继续命令。
 
 提示命令应在仓库目录执行，也保存在本次结果的 `next_command.txt` 和 `next_command.json`（参数数组、工作目录和 shell）。命令仅供复制，不自动执行。全量检查成功后仍先建议抽查少量窗口，确认后可另建全量索引。
 
@@ -80,22 +82,6 @@ python extract_realestate10k.py --inspect-only
 | records.jsonl | 所有记录的全部字段和数组数值，每行一条，无省略号截断；文件可能较大 |
 
 数组表示为 `{"__ndarray__": true, "dtype": "float64", "shape": [F,4,4], "values": [...]}`；特殊 NaN/Infinity 使用显式标记对象，保证标准 JSON 可读。此格式用于人工查看，不替代原 NPZ。输出根目录保留 extraction.txt、parameters.json、launch.json、summary.json、status.json；`status=completed` 表示导出完成，不表示第三步的数据检查通过。
-
-### 临时匹配诊断
-
-遇到 `missing_camera_metadata` 时，可先运行临时只读诊断（不是第三步的替代）：
-
-```bash
-python diagnose_realcam_temp.py --audit-dir output/realestate10k_audit_smoke_v2 --splits test --limit 10
-```
-
-默认沿用上次检查的 resolved_config.yaml 和 metadata_sources.json 中实际选择的 NPZ，并优先检查 rejected.csv 的路径。没有历史输出时，可用 `--camera-metadata-dir output/realestate10k_metadata_v2` 替代 `--audit-dir`；`--config`、`--workspace-root` 和 `--set` 可覆盖配置。诊断双集合可省略 `--splits test`。
-
-每次生成唯一的 `output/diagnose_realcam_temp_<时间>/`，保存 diagnosis.txt、report.json、参数、配置和状态；输入文件不修改。匹配失败会自动对照数据根目录及所选 NPZ 目录内可用的 train/test 子集和总表；`--compare-full` 可在匹配成功时也强制对照。NPZ 顺序加载，每份完整解压到内存一次，仍需足够 RAM；不会解码视频，也不加载模型。
-
-报告区分完整路径精确匹配、仅大小写不同、场景目录＋文件名相同、仅文件名相同。后几类仅为排错线索，不替换正式读取的精确匹配。退出码 0 仅表示所抽查的路径在选定 NPZ 中存在、视频文件存在且文本非空，仍需重新执行第三步验证解码和相机几何；退出码 1 表示匹配/文件问题，2 表示诊断执行失败。分享本次 diagnosis.txt 和 report.json 即可进一步定位。
-
-服务器问题定位并验证后，可删除 `diagnose_realcam_temp.py`、`tests/test_diagnose_realcam_temp.py` 和本段临时说明；生产入口不依赖该脚本。
 
 相机按完整、规范化后的相对 `video_path` 精确匹配，不按行号或视频文件名匹配，不自动替换路径中的 train/test。匹配失败时 `rejected.csv` 同时记录该路径、输入 CSV、所选 NPZ 和实际视频文件路径。目录或字段名适配不能补齐 NPZ 中确实缺失的条目。更新输入 CSV/NPZ 或选择规则后应重新运行第 3 步，并以新清单重建第 4 步窗口索引。
 

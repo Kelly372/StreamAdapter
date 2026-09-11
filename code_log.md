@@ -2,6 +2,8 @@
 
 本文件是本项目的持续维护清单。后续每次实施应同步更新任务状态、修改文件、验证结果、限制和下一步；只有配置定义完成时，不将对应训练功能标记为已实现。
 
+当前入口（2026-09-11 整理）：用户确认 RealEstate10K 数据集已构建、第二步验证已完成，服务器旧 output 将手动清空。从 `python validate_realestate10k.py --run-name realestate10k_v1` 开始，成功后运行打印的 `python validate_realestate10k.py --infer output/realestate10k_v1`。一次验证的全部内容归入一个目录，直接查看 comparisons，各阶段记录位于 records；详细说明见 [第三步统一验证](docs/realestate10k_validation.md)。下面按日期保留的旧命令只表示历史实施过程，不再是当前主流程。
+
 ## 全局约定
 
 - **项目目标固定为 I2V：首帧图像＋文本＋相机轨迹 → 受控视频。基础复现也默认 I2V；T2V 仅作可选对照。**
@@ -312,3 +314,13 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - summary.json 新增 requested_exports、export_shortfall；可用片段不足请求数量时终端明确提示扩大第三步清单或第四步候选上限。已有清单若只检查了 10 条，划分验证集后训练清单可能不足 10 条，需要先扩大第三步检查。
 - 基线默认 inference_iter=-1、num_samples=1，处理全部导出的图片，每张生成一次并按前项保存对应 GT，无须改变采样参数。结果和建议命令仍使用新的独立运行目录。
 - 验证：4 项下一步命令 CPU 测试通过，覆盖 10 条导出建议、候选仅 1 条时明确记录短缺 9 条以及后续检查命令衔接；3 个相关 Python 文件语法检查、默认 YAML 数量和 git diff --check 通过。参数及记录：`output/verification_baseline10_20260911-114927/`；未运行服务器 10 条视频的 GPU 推理。
+
+### 2026-09-11：清理临时工具，统一第三步验证入口与输出
+
+- 用户确认数据构建和第二步验证已完成，并将手动清空服务器 output。新增 `validate_realestate10k.py`：直接要求数据目录内的 RealEstate10K_train/test.csv/npz，不查旧 output，不重新提取或回退原始 RealCam-Vid NPZ。保留精确相机匹配、视频解码、分组泄漏检查和连续窗口选择。
+- 准备命令为 `python validate_realestate10k.py --run-name realestate10k_v1`；默认每个 split 抽查 50 条，按 test 清单顺序取 10 个不同可用 clip。窗口帧数/尺寸从所选 Wan2.2-TI2V-5B I2V 配置推导，seed 同时控制窗口和后续推理。候选不足明确失败并保留诊断与已有 GT，不重复凑数、不提示继续推理。
+- 一次验证只有 output/realestate10k_v1 一个顶层目录。comparisons/0000…0009 下保存 input.png、ground_truth.mp4、sample.json、reference.json；推理后增加 generated.mp4 和 prompt.txt。顶层 validation.txt、summary.json、next_command.txt 提供摘要和唯一下一步；完整参数、配置、来源、清单、缓存和日志统一归入 records/inspection、records/windows、records/inference。
+- 准备成功后仅打印 `python validate_realestate10k.py --infer output/realestate10k_v1`，不创建独立 check-only 目录。推理仍执行必要的文件存在检查；输入图片/文本快照发生变化时在加载模型前拒绝执行。仅在推理返回成功且结果数等于预期时标记 completed，这不替代视觉质量验收。新入口不修改采样算法，也不输入相机轨迹。
+- 删除临时 diagnose_realcam_temp.py、tests/test_diagnose_realcam_temp.py 和不再需要的 collect_baseline_references.py，清理对应活动文档/测试；保留历史日志。保留数据构建工具和原独立阶段入口作为底层与专项工具，新主流程不再依赖这些旧命令的串联或旧输出。
+- README 改为两条命令；新增 docs/realestate10k_validation.md，其他专项文档注明主入口。未删除本地或服务器 output，未修改数据集文件。重跑使用新 run-name；迁移机器后从准备命令开始重建解析路径和缓存。
+- 验证：69 项 CPU 测试全部通过、无跳过，178 个 Python 文件语法检查及 git diff --check 通过。新增空 output + 已构建 CSV/NPZ 的实际合成视频解码/窗口/GT 集成测试，覆盖一目录组织、唯一后续命令、125 帧 GT、原数据未变、候选不足、缺 NPZ 不回退、输入变更阻断；推理派发与完成统计使用 mock，未运行 GPU。记录：`output/verification_unified_validation_20260911-153924/`（parameters.json、tests.txt、summary.json）。真实服务器视觉运动问题仍待用户对照 GT 检查。

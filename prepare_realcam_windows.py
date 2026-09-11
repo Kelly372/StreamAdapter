@@ -12,7 +12,7 @@ import numpy as np
 from omegaconf import OmegaConf
 from PIL import Image
 
-from utils.project_paths import REPO_ROOT, add_path_arguments, resolve_path, workspace_root
+from utils.project_paths import REPO_ROOT, add_path_arguments, resolve_path, workspace_root, stage_output_dir
 from utils.realcam_dataset import sha256_file
 from utils.realcam_windows import RealCamWindowDataset, build_window_index, validate_settings
 from utils.run_record import environment_record, write_json
@@ -72,7 +72,7 @@ def export_sample(sample, folder, baseline_folder, options):
     return metadata
 
 
-def main(argv=None):
+def main(argv=None, *, output_dir=None, show_next=True):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/data/realcam_windows.yaml")
     add_path_arguments(parser)
@@ -100,7 +100,7 @@ def main(argv=None):
     reserved = {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,179}", name) or name.endswith(".") or name.split(".")[0].upper() in reserved:
         raise ValueError("Run name must be a portable single folder name, max 180 characters")
-    folder = REPO_ROOT / "output" / name
+    folder = stage_output_dir(output_dir, REPO_ROOT) if output_dir is not None else REPO_ROOT / "output" / name
     folder.mkdir(parents=True, exist_ok=False)
     config.run = {"name": name, "output_folder": str(folder), "manifest": str(manifest), "limit": args.limit,
                   "shot_annotations": str(resolve_path(args.shot_annotations, REPO_ROOT)) if args.shot_annotations else None}
@@ -149,6 +149,8 @@ def main(argv=None):
         if summary["export_shortfall"]:
             print(f"Requested {summary['requested_exports']} distinct clips, exported only {summary['exported_samples']}. "
                   "Inspect more rows in stage 3 or increase --limit here; no clips were duplicated to fill the count.", flush=True)
+        if not show_next:
+            return 0
         if summary["exported_samples"]:
             command = ["python", "run_baseline.py", "--config", "configs/baseline/longlive_bf16_i2v.yaml",
                        "--set", f"data.data_path=output/{name}/baseline_i2v", "--check-only",

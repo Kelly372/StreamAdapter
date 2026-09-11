@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from omegaconf import OmegaConf
-from utils.project_paths import REPO_ROOT, add_path_arguments, load_config, resolve_path
+from utils.project_paths import REPO_ROOT, add_path_arguments, load_config, resolve_path, stage_output_dir
 from utils.run_record import environment_record, write_json
 from utils.next_command import next_run_name, print_next_command
 
@@ -55,7 +55,7 @@ def check_inputs(config):
     return errors
 
 
-def main():
+def main(argv=None, *, output_dir=None, show_next=True):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/baseline/longlive_bf16_i2v.yaml")
     add_path_arguments(parser)
@@ -63,7 +63,7 @@ def main():
     parser.add_argument("--tag", default="", help="Optional experiment label appended to the generated name")
     parser.add_argument("--dry-run", action="store_true", help="Resolve and record config, report inputs; no GPU/model imports")
     parser.add_argument("--check-only", action="store_true", help="Check required paths; return nonzero if any are missing")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if "LOCAL_RANK" in os.environ:
         raise ValueError("run_baseline.py is a single-process launcher; do not launch it with torchrun.")
     config = load_config(args.config, workspace=args.workspace_root, overrides=args.overrides)
@@ -78,7 +78,7 @@ def main():
         raise ValueError("Run name must be a portable single folder name: letters, digits, _, -, . (max 180).")
     if run_name.split(".")[0].upper() in {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}:
         raise ValueError("Run name is reserved on Windows.")
-    folder = REPO_ROOT / "output" / run_name
+    folder = stage_output_dir(output_dir, REPO_ROOT) if output_dir is not None else REPO_ROOT / "output" / run_name
     folder.mkdir(parents=True, exist_ok=False)
     config.output_folder = str(folder)
     config.inference.output_folder = str(folder)
@@ -89,7 +89,7 @@ def main():
     (folder / "source_config.yaml").write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     command = [sys.executable, "-u", str(REPO_ROOT / "inference.py"), "--config_path", str(config_path)]
     # argv arrays, rather than a shell string, preserve spaces on both platforms.
-    record = {"launcher_argv": sys.argv, "child_argv": command, "cwd": str(REPO_ROOT),
+    record = {"launcher_argv": sys.argv if argv is None else argv, "child_argv": command, "cwd": str(REPO_ROOT),
               "overrides": args.overrides, "environment": environment_record()}
     write_json(folder / "launch.json", record)
     (folder / "inference.txt").write_text(
@@ -104,7 +104,7 @@ def main():
     if args.dry_run or args.check_only:
         status = "dry_run" if args.dry_run else "inputs_valid" if not missing else "inputs_missing"
         write_json(folder / "status.json", {"status": status, "gpu_tested": False})
-        if not missing:
+        if not missing and show_next:
             command = ["python", "run_baseline.py", "--config", args.config]
             if args.workspace_root is not None:
                 command += ["--workspace-root", args.workspace_root]

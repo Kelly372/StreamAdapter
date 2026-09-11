@@ -7,10 +7,15 @@
 本地 StreamAdapter 开发：修改清单与进度见 [code_log.md](code_log.md)；
 使用可迁移路径和独立结果目录复现基础模型，见 [复现说明](docs/baseline_reproduction.md)。
 项目目标为首帧、文本、相机轨迹条件下的 I2V；基础复现默认 I2V，当前先验证首帧条件，相机 Adapter 待实现。
-入口：`python run_baseline.py --check-only`，检查通过后运行 `python run_baseline.py`；需先准备图片和同名提示词。
-RealEstate10K 数据检查：`python inspect_realcam.py --limit 10 --tag schema-smoke`；CSV/相机 NPZ 关联、来源划分和输出说明见 [数据接入说明](docs/realcam_csv.md)。
-数据根目录默认 `workspace/public_data/RealCam-Vid/RealEstate10K`，CSV 视频路径使用 `train/...`、`test/...`。用户整理 CSV 后，运行 `python extract_realestate10k.py --run-name realestate10k_csv_aligned_v1`，按 CSV 划分从两份原始 NPZ 匹配并生成子集 NPZ；成功后打印检查命令。也可将新 NPZ 移入数据根目录，再运行 `python inspect_realcam.py --limit 10 --tag relocated-smoke`。
-第 4 步：`python prepare_realcam_windows.py --manifest output/<audit_run>/train.csv --limit 10 --export-count 2 --tag window-smoke`；125 帧窗口、首帧、相机同步与基线输入导出见 [窗口采样说明](docs/realcam_windows.md)。
+RealEstate10K 数据集已构建、第二步基础验证已完成。当前从[第三步统一验证](docs/realestate10k_validation.md)开始，不依赖旧 output，也不重做 NPZ 分离：
+
+```bash
+python validate_realestate10k.py --run-name realestate10k_v1
+# 上一步成功后会打印这一条推理命令：
+python validate_realestate10k.py --infer output/realestate10k_v1
+```
+
+默认检查每个 split 前 50 条、从 test 集选取 10 个可用 clip。一次验证只生成 `output/realestate10k_v1/`；直接打开 `comparisons/0000/` 至 `0009/` 对照 `ground_truth.mp4` 和 `generated.mp4`。完整配置、清单和日志放在同一目录的 `records/` 中。数据根目录默认 `workspace/public_data/RealCam-Vid/RealEstate10K`，四份已整理好的 CSV/NPZ 和 train/test 视频存放于数据目录，不能依赖 output 中的副本。
 
 [![Paper](https://img.shields.io/badge/Paper-LongLive_2.0-brown)](https://arxiv.org/abs/2605.18739)
 [![Paper](https://img.shields.io/badge/Paper-LongLive_1.0-orange)](https://github.com/NVlabs/LongLive/tree/v1.0)

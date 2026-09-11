@@ -7,7 +7,7 @@ import sys
 
 from omegaconf import OmegaConf
 
-from utils.project_paths import REPO_ROOT, add_path_arguments, resolve_path, workspace_root
+from utils.project_paths import REPO_ROOT, add_path_arguments, resolve_path, workspace_root, stage_output_dir
 from utils.realcam_inspection import inspect_dataset
 from utils.run_record import environment_record, write_json
 from utils.next_command import data_context, next_run_name, print_next_command
@@ -30,7 +30,7 @@ def load_inspection_config(path, workspace=None, overrides=()):
     return config
 
 
-def main(argv=None):
+def main(argv=None, *, output_dir=None, show_next=True):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", default="configs/data/realcam_inspection.yaml")
     add_path_arguments(parser)
@@ -57,7 +57,7 @@ def main(argv=None):
     if (not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,179}", name) or name.endswith(".")
             or name.split(".")[0].upper() in reserved):
         raise ValueError("Run name must be a portable single folder name (letters, digits, _, -, .; max 180)")
-    folder = REPO_ROOT / "output" / name
+    folder = stage_output_dir(output_dir, REPO_ROOT) if output_dir is not None else REPO_ROOT / "output" / name
     folder.mkdir(parents=True, exist_ok=False)
     config.run = {"name": name, "output_folder": str(folder)}
     OmegaConf.save(config, folder / "resolved_config.yaml", resolve=True)
@@ -92,7 +92,7 @@ def main(argv=None):
             print("Grouping includes directories or unidentified rows; original-video-level leakage check is incomplete. See summary.json.", flush=True)
         for failure in failures:
             print(f"Audit failed: {failure}", flush=True)
-        if code == 0:
+        if code == 0 and show_next:
             command = ["python", "prepare_realcam_windows.py", "--manifest", f"output/{name}/train.csv",
                        "--limit", "50", "--export-count", "10", "--run-name", next_run_name(folder, "audit", "windows")]
             command += data_context(config, REPO_ROOT)

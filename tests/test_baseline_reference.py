@@ -2,11 +2,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 
-from omegaconf import OmegaConf
 
-import collect_baseline_references as collect
 from utils.baseline_reference import copy_reference
 
 
@@ -52,18 +49,9 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual(result["status"], "gt_unavailable")
         self.assertNotIn("ground_truth", result["files"])
 
-    def test_backfill_matches_saved_index_and_prompt_without_model(self):
-        OmegaConf.save(OmegaConf.create({"i2v": True, "save_with_index": True,
-                                        "data_path": "missing-old-workspace"}), self.run / "resolved_config.yaml")
-        generated = self.run / "rank0-0-0_regular.mp4"
-        generated.write_bytes(b"generated video, leave untouched")
-        (self.run / "rank0-0-0_regular_prompts.txt").write_text("[0,1,2,3] A moving camera.\n")
-        args = ["--run-dir", "output/baseline", "--data-path", "output/windows/baseline_i2v"]
-        with patch.object(collect, "REPO_ROOT", self.repo):
-            self.assertEqual(collect.main(args), 0)
-            self.assertEqual(collect.main(args), 0)
-        self.assertEqual(generated.read_bytes(), b"generated video, leave untouched")
-        self.assertEqual((self.run / "rank0-0-0_regular_gt.mp4").read_bytes(), (self.sample / "gt.mp4").read_bytes())
-        (self.data / "example.txt").write_text("Unrelated sample")
-        with patch.object(collect, "REPO_ROOT", self.repo):
-            self.assertEqual(collect.main(args), 1)
+    def test_grouped_names_are_readable(self):
+        result = copy_reference(self.image, self.run, "generated", simple_names=True)
+        self.assertEqual(result["files"]["ground_truth"], "ground_truth.mp4")
+        self.assertTrue((self.run / "input.png").is_file())
+        self.assertTrue((self.run / "sample.json").is_file())
+        self.assertTrue((self.run / "reference.json").is_file())

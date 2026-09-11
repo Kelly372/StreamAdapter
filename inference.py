@@ -39,6 +39,7 @@ from omegaconf import OmegaConf
 from tqdm import tqdm
 from torchvision.io import write_video
 from utils.baseline_reference import copy_reference
+from utils.project_paths import stage_output_dir
 from einops import rearrange
 import torch.distributed as dist
 from torch.utils.data import DataLoader, SequentialSampler
@@ -678,27 +679,37 @@ for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
             model_type = "regular"
             
         for seed_idx in range(config.num_samples):
+            comparison_root = config.get("inference", {}).get("comparison_dir")
+            result_folder = Path(config.output_folder)
             if config.save_with_index:
                 base_name = f'rank{rank}-{idx}-{seed_idx}_{model_type}'
             else:
                 base_name = f'rank{rank}-{prompt[:100]}-{seed_idx}_{model_type}'
 
+            if comparison_root:
+                if not isinstance(dataset, ImagePromptDataset):
+                    raise ValueError("Grouped comparisons require I2V image inputs")
+                sample_name = f"{idx:04d}" if config.num_samples == 1 else f"{idx:04d}_{seed_idx:02d}"
+                result_folder = stage_output_dir(comparison_root) / sample_name
+                result_folder.mkdir(parents=True, exist_ok=True)
+                base_name = "generated"
+
             if save_latents_only:
-                latent_path = os.path.join(config.output_folder, f'{base_name}.pt')
+                latent_path = os.path.join(result_folder, f'{base_name}.pt')
                 torch.save(latents[seed_idx].cpu(), latent_path)
             else:
-                output_path = os.path.join(config.output_folder, f'{base_name}.mp4')
+                output_path = os.path.join(result_folder, f'{base_name}.mp4')
                 fps = 24 if '5B' in config.model_kwargs.model_name else 16
                 write_video(output_path, video[seed_idx], fps=fps)
 
-            prompt_txt_path = os.path.join(config.output_folder, f'{base_name}_prompts.txt')
+            prompt_txt_path = os.path.join(result_folder, 'prompt.txt' if comparison_root else f'{base_name}_prompts.txt')
             save_prompts_to_txt(
                 prompts[seed_idx] if isinstance(prompts[seed_idx], list) else [prompts[seed_idx]],
                 prompt_txt_path,
                 is_main_process=(rank == 0),
             )
             if isinstance(dataset, ImagePromptDataset):
-                reference = copy_reference(dataset.images[idx], config.output_folder, base_name)
+                reference = copy_reference(dataset.images[idx], result_folder, base_name, simple_names=bool(comparison_root))
                 print(f"[reference] {base_name}: "
                       f"{reference['files'].get('ground_truth', 'GT unavailable (image-only input)')}", flush=True)
 
