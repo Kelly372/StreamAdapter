@@ -17,7 +17,7 @@ python prepare_realcam_windows.py --manifest output/<audit_run>/train.csv --expo
 python prepare_realcam_windows.py --manifest output/<audit_run>/validation.csv --set windows.crop_mode=center --export-count 2 --tag val-window-check
 ```
 
-`--manifest` 和 `--shot-annotations` 相对仓库根目录，`paths.data_root` 相对 workspace；支持 `--workspace-root`、重复 `--set KEY=VALUE`。无需手动 export 环境变量。默认配置为 `configs/data/realcam_windows.yaml`。
+`--manifest` 和 `--shot-annotations` 相对仓库根目录，`paths.data_root` 相对 workspace，默认 `public_data/RealCam-Vid/RealEstate10K`；支持 `--workspace-root`、重复 `--set KEY=VALUE`。无需手动 export 环境变量。默认配置为 `configs/data/realcam_windows.yaml`。CSV 改为短路径后应使用新第三步清单；旧结果绑定原始 CSV 哈希。
 
 `--limit 10` 检查清单前 10 条，可能全部不适合目标窗口；不代表整个数据集没有可用样本。输入应已在第 3 步完成集合和目录组重叠检查，第 4 步不重新划分集合。
 
@@ -39,8 +39,8 @@ python prepare_realcam_windows.py --manifest output/<audit_run>/validation.csv -
 
 ```json
 {
-  "RealEstate10K/train/group_a/clip_a.mp4": [150, 300],
-  "RealEstate10K/train/group_b/clip_b.mp4": []
+  "train/group_a/clip_a.mp4": [150, 300],
+  "train/group_b/clip_b.mp4": []
 }
 ```
 
@@ -92,7 +92,7 @@ from utils.realcam_windows import RealCamWindowDataset
 
 dataset = RealCamWindowDataset(
     "output/<window_run>/window_index.json",
-    "<workspace>/public_data/RealCam-Vid",
+    "<workspace>/public_data/RealCam-Vid/RealEstate10K",
 )
 dataset.set_epoch(0)
 sample = dataset[0]

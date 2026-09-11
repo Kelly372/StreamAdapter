@@ -49,7 +49,7 @@ def resolve_config_paths(config):
         root = workspace_root(paths.get("workspace_root"))
         paths.workspace_root = str(root)
         paths.repo_root = str(REPO_ROOT)
-        paths.data_root = str(resolve_path(paths.get("data_root", "public_data/RealCam-Vid"), root))
+        paths.data_root = str(resolve_path(paths.get("data_root", "public_data/RealCam-Vid/RealEstate10K"), root))
         paths.model_root = str(resolve_path(paths.get("model_root", "pretrained_model/LongLive"), root))
         model_root = Path(paths.model_root)
         config.base_model_dir = str(resolve_path(config.get("base_model_dir", "../Wan2.2-TI2V-5B"), model_root))

@@ -2,7 +2,7 @@
 # All relative paths are independent of terminal cwd.
 paths:
   workspace_root: null  # auto: workspace/project/StreamAdapter -> workspace
-  data_root: public_data/RealCam-Vid
+  data_root: public_data/RealCam-Vid/RealEstate10K
   model_root: pretrained_model/LongLive
 base_model_dir: ../Wan2.2-TI2V-5B  # relative to paths.model_root
 

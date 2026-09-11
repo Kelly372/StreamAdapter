@@ -35,7 +35,7 @@ def data_context(config, repo):
     if root.resolve() != workspace_root(repo_root=repo):
         args += ["--workspace-root", portable_path(root, repo)]
     data = portable_path(config.paths.data_root, root)
-    if data != "public_data/RealCam-Vid":
+    if data != "public_data/RealCam-Vid/RealEstate10K":
         args += ["--set", f"paths.data_root={data}"]
     return args
 

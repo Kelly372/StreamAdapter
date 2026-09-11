@@ -9,7 +9,7 @@
 项目目标为首帧、文本、相机轨迹条件下的 I2V；基础复现默认 I2V，当前先验证首帧条件，相机 Adapter 待实现。
 入口：`python run_baseline.py --check-only`，检查通过后运行 `python run_baseline.py`；需先准备图片和同名提示词。
 RealEstate10K 数据检查：`python inspect_realcam.py --limit 10 --tag schema-smoke`；CSV/相机 NPZ 关联、来源划分和输出说明见 [数据接入说明](docs/realcam_csv.md)。
-可先运行 `python extract_realestate10k.py --run-name realestate10k_metadata_v1` 分离子集 NPZ，再以 `--camera-metadata-dir output/realestate10k_metadata_v1` 指定检查器输入。
+数据根目录默认 `workspace/public_data/RealCam-Vid/RealEstate10K`，CSV 视频路径使用 `train/...`、`test/...`。用户整理 CSV 后，运行 `python extract_realestate10k.py --run-name realestate10k_csv_aligned_v1`，按 CSV 划分从两份原始 NPZ 匹配并生成子集 NPZ；成功后打印检查命令。也可将新 NPZ 移入数据根目录，再运行 `python inspect_realcam.py --limit 10 --tag relocated-smoke`。
 第 4 步：`python prepare_realcam_windows.py --manifest output/<audit_run>/train.csv --limit 10 --export-count 2 --tag window-smoke`；125 帧窗口、首帧、相机同步与基线输入导出见 [窗口采样说明](docs/realcam_windows.md)。
 
 [![Paper](https://img.shields.io/badge/Paper-LongLive_2.0-brown)](https://arxiv.org/abs/2605.18739)

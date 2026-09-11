@@ -7,7 +7,7 @@ experiment:
 
 paths:
   workspace_root: null
-  data_root: public_data/RealCam-Vid
+  data_root: public_data/RealCam-Vid/RealEstate10K
   model_root: pretrained_model/LongLive
 base_model_dir: ../Wan2.2-TI2V-5B
 

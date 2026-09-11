@@ -31,7 +31,7 @@ class RealCamTests(unittest.TestCase):
         self.output.mkdir()
         self.config = inspect_realcam.load_inspection_config(
             CONFIG, workspace=str(self.root.parents[1]), overrides=[
-                "data.train_csv=train.csv", "data.group_by=source_id", "inspection.probe_mode=metadata",
+                "paths.data_root=public_data/RealCam-Vid", "data.train_csv=train.csv", "data.group_by=source_id", "inspection.probe_mode=metadata",
                 "data.validation_fraction=0", "inspection.progress_every=0"])
 
     def row(self, name, source=None, frames=125, **changes):
@@ -214,14 +214,14 @@ class RealCamTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "found 2"):
             discover_csv(self.root, "train")
         config = inspect_realcam.load_inspection_config(CONFIG, workspace=str(self.root.parents[1]),
-                                                       overrides=["data.train_csv=train.csv"])
+                                                       overrides=["paths.data_root=public_data/RealCam-Vid", "data.train_csv=train.csv"])
         self.assertEqual(Path(config.data.train_csv), self.root / "train.csv")
 
     def test_cli_outputs_and_failure_status_no_overwrite(self):
         self.inputs([self.row("good")])
         repo = Path(self.temp.name) / "fake_repo"
         args = ["--config", str(inspect_realcam.REPO_ROOT / CONFIG), "--workspace-root", str(self.root.parents[1]),
-                "--probe-mode", "metadata", "--set", "data.validation_fraction=0", "--set", "data.train_csv=train.csv",
+                "--probe-mode", "metadata", "--set", "paths.data_root=public_data/RealCam-Vid", "--set", "data.validation_fraction=0", "--set", "data.train_csv=train.csv",
                 "--run-name", "audit"]
         with patch.object(inspect_realcam, "REPO_ROOT", repo):
             self.assertEqual(inspect_realcam.main(args), 0)

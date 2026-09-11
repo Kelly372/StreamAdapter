@@ -125,7 +125,7 @@ class ExtractionTests(unittest.TestCase):
             (self.data / f"RealCam-Vid_{split}.csv").write_text("unused", encoding="utf-8")
         repo = self.root / "repo"
         with patch.object(extraction, "REPO_ROOT", repo):
-            args = ["--workspace-root", str(self.root), "--run-name", "subset"]
+            args = ["--split-policy", "archive", "--workspace-root", str(self.root), "--run-name", "subset"]
             self.assertEqual(extraction.main(args), 0)
             with self.assertRaises(FileExistsError):
                 extraction.main(args)
@@ -136,7 +136,7 @@ class ExtractionTests(unittest.TestCase):
         with patch.object(inspect_realcam, "REPO_ROOT", repo):
             self.assertEqual(inspect_realcam.main([
                 "--config", str(config_path), "--workspace-root", str(self.root), "--camera-metadata-dir", "output/subset",
-                "--set", "data.validation_fraction=0", "--probe-mode", "metadata", "--run-name", "audit"]), 0)
+                "--set", "paths.data_root=public_data/RealCam-Vid", "--set", "data.validation_fraction=0", "--probe-mode", "metadata", "--run-name", "audit"]), 0)
         sources = json.loads((repo / "output/audit/metadata_sources.json").read_text())
         self.assertEqual(Path(sources["RealEstate10K_test.csv"]["official_camera_npz"]["path"]), folder / "RealEstate10K_test.npz")
         summary = json.loads((repo / "output/audit/summary.json").read_text())
@@ -145,7 +145,7 @@ class ExtractionTests(unittest.TestCase):
     def test_single_split_and_preflight_failure_are_recorded(self):
         source = self.make_input("test")
         with patch.object(extraction, "REPO_ROOT", self.root / "repo"):
-            self.assertEqual(extraction.main(["--splits", "test", "--test-npz", str(source), "--run-name", "test-only"]), 0)
+            self.assertEqual(extraction.main(["--split-policy", "archive", "--splits", "test", "--test-npz", str(source), "--run-name", "test-only"]), 0)
             self.assertEqual(extraction.main(["--workspace-root", str(self.root), "--run-name", "missing-train"]), 2)
         self.assertFalse((self.root / "repo/output/test-only/RealEstate10K_train.npz").exists())
         status = json.loads((self.root / "repo/output/missing-train/status.json").read_text())

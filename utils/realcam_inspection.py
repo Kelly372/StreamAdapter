@@ -62,12 +62,15 @@ def identify_row(row, columns, settings, original_split):
     if source_id:
         group_id, group_basis = f"source:{source_id}", "source_id"
     else:
-        parts = video.replace("\\", "/").split("/")
-        # Only the confirmed RealEstate10K/<original split>/<group>/<clip> layout.
+        parts = [part for part in video.replace("\\", "/").split("/") if part not in ("", ".")]
+        # New subset-root paths are <original split>/<group>/<clip>.
+        # Keep the old prefixed layout for explicitly configured legacy roots.
         # Original data folder split is NOT the RealCam-Vid metadata split.
         matches = [i for i, part in enumerate(parts) if _name(part) == _name(settings["subset"])]
-        if not matches or len(parts) - matches[-1] != 4 or parts[matches[-1] + 1] not in ("train", "test"):
-            raise MetadataError("unknown_directory_group", "Expected RealEstate10K/{train|test}/<group>/<video>; otherwise provide source_id")
+        short = len(parts) == 3 and parts[0] in ("train", "test")
+        prefixed = bool(matches) and len(parts) - matches[-1] == 4 and parts[matches[-1] + 1] in ("train", "test")
+        if ".." in parts or not (short or prefixed):
+            raise MetadataError("unknown_directory_group", "Expected {train|test}/<group>/<video> relative to the subset root; otherwise provide source_id")
         parent = parts[-2]
         if parent in ("", ".", ".."):
             raise MetadataError("unknown_directory_group", "Empty or relative parent directory")

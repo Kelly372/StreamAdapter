@@ -1,4 +1,4 @@
-"""Step 3A: extract RealEstate10K metadata without changing source splits or arrays."""
+"""Step 3A: build CSV-aligned RealEstate10K NPZs, or inspect original archives."""
 import argparse
 from datetime import datetime
 import json
@@ -9,9 +9,11 @@ import sys
 import numpy as np
 
 from utils.project_paths import REPO_ROOT, resolve_path, workspace_root
-from utils.realcam_dataset import load_official_camera_index, sha256_file
+from utils.realcam_dataset import discover_csv, load_official_camera_index, sha256_file
 from utils.run_record import environment_record, write_json
 from utils.realcam_readable import export_readable_npz
+from utils.realcam_partition import partition_by_csv
+from utils.next_command import portable_path, print_next_command
 
 
 def metadata_equal(left, right):
@@ -62,9 +64,14 @@ def extract_split(source, destination, data_root):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace-root")
-    parser.add_argument("--data-root", default="public_data/RealCam-Vid", help="Relative to workspace")
-    parser.add_argument("--train-npz", default="RealCam-Vid_train.npz", help="Relative to data root, or absolute")
-    parser.add_argument("--test-npz", default="RealCam-Vid_test.npz", help="Relative to data root, or absolute")
+    parser.add_argument("--data-root", default="public_data/RealCam-Vid/RealEstate10K", help="CSV/video root, relative to workspace")
+    parser.add_argument("--source-root", default="public_data/RealCam-Vid", help="Original NPZ root, relative to workspace")
+    parser.add_argument("--train-npz", default="RealCam-Vid_train.npz", help="Relative to source root, or absolute")
+    parser.add_argument("--test-npz", default="RealCam-Vid_test.npz", help="Relative to source root, or absolute")
+    parser.add_argument("--train-csv", help="Relative to data root, or absolute")
+    parser.add_argument("--test-csv", help="Relative to data root, or absolute")
+    parser.add_argument("--split-policy", choices=("csv", "archive"), default="csv",
+                        help="csv: match CSV rows across both NPZs (default); archive: legacy subset filtering, original paths/splits")
     parser.add_argument("--splits", nargs="+", choices=("train", "test"), help="Default: both for extraction; test for --inspect-only")
     parser.add_argument("--inspect-only", action="store_true", help="Export all NPZ records as readable JSON instead of extracting a subset")
     parser.add_argument("--preview-count", type=int, default=3, help="Records printed as summaries and included in pretty preview.json; all records still exported")
@@ -78,7 +85,9 @@ def main(argv=None):
         raise ValueError("--splits must not contain duplicates")
     root = workspace_root(args.workspace_root)
     data_root = resolve_path(args.data_root, root)
-    prefix = "metadata_readable" if args.inspect_only else "metadata_realestate10k"
+    source_root = resolve_path(args.source_root, root)
+    csv_mode = not args.inspect_only and args.split_policy == "csv"
+    prefix = "metadata_readable" if args.inspect_only else "metadata_realestate10k_csv" if csv_mode else "metadata_realestate10k"
     name = args.run_name or (f"{prefix}_{'-'.join(args.splits)}_{datetime.now():%Y%m%d-%H%M%S-%f}" +
                              (f"_{args.tag}" if args.tag else ""))
     reserved = {"CON", "PRN", "AUX", "NUL", *[f"COM{i}" for i in range(1, 10)], *[f"LPT{i}" for i in range(1, 10)]}
@@ -87,13 +96,16 @@ def main(argv=None):
         raise ValueError("Run name must be a portable single folder name (max 180 characters)")
     folder = REPO_ROOT / "output" / name
     folder.mkdir(parents=True, exist_ok=False)
-    inputs = {split: resolve_path(getattr(args, f"{split}_npz"), data_root) for split in args.splits}
+    inputs = {split: resolve_path(getattr(args, f"{split}_npz"), source_root)
+              for split in (("train", "test") if csv_mode else args.splits)}
     parameters = {"arguments": vars(args), "workspace_root": str(root), "data_root": str(data_root),
                   "inputs": {key: str(value) for key, value in inputs.items()}, "output_folder": str(folder),
-                  "mode": "readable_inspection" if args.inspect_only else "subset_extraction",
+                  "source_root": str(source_root),
+                  "mode": "readable_inspection" if args.inspect_only else "csv_partition" if csv_mode else "subset_extraction",
                   "subset": None if args.inspect_only else "RealEstate10K",
                   "filter_field": None if args.inspect_only else "dataset_source", "compressed": not args.inspect_only,
-                  "verify_roundtrip": not args.inspect_only, "change_camera_coordinates": False, "change_split": False}
+                  "verify_roundtrip": not args.inspect_only, "change_camera_coordinates": False,
+                  "split_rule": "CSV membership" if csv_mode else "input archive", "normalize_video_path": csv_mode}
     write_json(folder / "parameters.json", parameters)
     write_json(folder / "launch.json", {"argv": sys.argv if argv is None else argv, "environment": environment_record()})
     (folder / "extraction.txt").write_text("RealCam metadata (step 3A): " + parameters["mode"] + "\n\n" +
@@ -105,12 +117,20 @@ def main(argv=None):
         for path in inputs.values():
             if not path.is_file():
                 raise FileNotFoundError(f"Input NPZ not found: {path}")
-        for split, path in inputs.items():
+        if csv_mode:
+            csv_paths = {split: discover_csv(data_root, split, getattr(args, f"{split}_csv"), subset="RealEstate10K") for split in args.splits}
+            parameters["csv_inputs"] = {split: str(path) for split, path in csv_paths.items()}
+            write_json(folder / "parameters.json", parameters)
+            (folder / "extraction.txt").write_text("RealCam metadata (step 3A): csv_partition\n\n" +
+                                                  json.dumps(parameters, ensure_ascii=False, indent=2), encoding="utf-8")
+            summaries = partition_by_csv(inputs, csv_paths, data_root, source_root, folder, equal=metadata_equal)
+            write_json(folder / "summary.json", summaries)
+        for split, path in (() if csv_mode else inputs.items()):
             print(f"[{split}] reading {path.name}", flush=True)
             if args.inspect_only:
-                summaries[split] = export_readable_npz(path, folder / split, data_root, preview_count=args.preview_count)
+                summaries[split] = export_readable_npz(path, folder / split, source_root, preview_count=args.preview_count)
             else:
-                summaries[split] = extract_split(path, folder / f"RealEstate10K_{split}.npz", data_root)
+                summaries[split] = extract_split(path, folder / f"RealEstate10K_{split}.npz", source_root)
             write_json(folder / "summary.json", summaries)
             if not args.inspect_only:
                 print(f"[{split}] selected {summaries[split]['selected_entries']}/{summaries[split]['input_entries']}; roundtrip verified", flush=True)
@@ -118,7 +138,17 @@ def main(argv=None):
         with (folder / "extraction.txt").open("a", encoding="utf-8") as handle:
             handle.write("\n\nResults:\n" + json.dumps(summaries, ensure_ascii=False, indent=2))
         if not args.inspect_only and set(args.splits) == {"train", "test"}:
-            print(f"Next: python inspect_realcam.py --camera-metadata-dir output/{name} --limit 10 --tag subset-smoke", flush=True)
+            if csv_mode:
+                command = ["python", "inspect_realcam.py", "--camera-metadata-dir", f"output/{name}", "--limit", "10", "--tag", "csv-aligned"]
+                if root != workspace_root(repo_root=REPO_ROOT):
+                    command += ["--workspace-root", portable_path(root, REPO_ROOT)]
+                if data_root != root / "public_data/RealCam-Vid/RealEstate10K":
+                    command += ["--set", f"paths.data_root={portable_path(data_root, root)}"]
+                for split, path in csv_paths.items():
+                    command += ["--set", f"data.{split}_csv={portable_path(path, data_root)}"]
+                print_next_command(folder, command, REPO_ROOT)
+            else:
+                print("Legacy archive filtering keeps original prefixes/splits; use --split-policy csv for the new subset-root layout.", flush=True)
         return 0
     except (Exception, KeyboardInterrupt) as exc:
         write_json(folder / "status.json", {"status": "failed", "returncode": 2,

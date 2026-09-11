@@ -11,7 +11,7 @@ workspace/
     configs/baseline/
     example/baseline_prompts.txt
     output/
-  public_data/RealCam-Vid/
+  public_data/RealCam-Vid/RealEstate10K/
   pretrained_model/
     Wan2.2-TI2V-5B/
       config.json
@@ -31,7 +31,7 @@ workspace/
 
 ## BF16 I2V：先检查，再生成
 
-先按下方“I2V 输入”准备首帧图片和同名文本，默认目录为 `workspace/public_data/RealCam-Vid/baseline_i2v/`。缺少输入时会停止，不会回退为 T2V。
+先按下方“I2V 输入”准备首帧图片和同名文本，默认目录为 `workspace/public_data/RealCam-Vid/RealEstate10K/baseline_i2v/`。缺少输入时会停止，不会回退为 T2V。
 
 以下命令在仓库目录执行，PowerShell/Linux 都不需要 export。若从其他 cwd 启动，给 Python 的脚本参数使用脚本的实际位置；脚本内部路径仍按仓库/workspace 解析。
 
@@ -75,7 +75,7 @@ python run_baseline.py --set num_output_frames=128 --set "data.image_or_video_sh
 CSV 元数据检查见 [realcam_csv.md](realcam_csv.md)；已检查清单可通过 [第 4 步窗口采样](realcam_windows.md) 导出 baseline_i2v/。原版复现入口仍使用图片与同名文本：
 
 ```text
-public_data/RealCam-Vid/baseline_i2v/
+public_data/RealCam-Vid/RealEstate10K/baseline_i2v/
   sample_001.png
   sample_001.txt
 ```

@@ -80,7 +80,7 @@ class WindowTests(unittest.TestCase):
                 writer.writeheader()
                 writer.writerows(split_rows)
         config = inspect_realcam.load_inspection_config("configs/data/realcam_inspection.yaml",
-            workspace=str(self.root / "workspace"), overrides=["data.validation_fraction=0", "inspection.progress_every=0",
+            workspace=str(self.root / "workspace"), overrides=["paths.data_root=public_data/RealCam-Vid", "data.validation_fraction=0", "inspection.progress_every=0",
                 f"inspection.probe_mode={probe_mode}", "inspection.min_valid_pose_fraction=0.9"])
         inspect_dataset(config, self.audit)
         return self.audit / "train.csv"
@@ -120,7 +120,7 @@ class WindowTests(unittest.TestCase):
                        "long_caption": "NPZ text must not replace the CSV text", "align_factor": 99.}
             np.savez_compressed(self.data / f"RealCam-Vid_{split}.npz", arr_0=np.array([payload], dtype=object))
         config = inspect_realcam.load_inspection_config("configs/data/realcam_inspection.yaml",
-            workspace=str(self.root / "workspace"), overrides=["data.validation_fraction=0", "inspection.progress_every=0"])
+            workspace=str(self.root / "workspace"), overrides=["paths.data_root=public_data/RealCam-Vid", "data.validation_fraction=0", "inspection.progress_every=0"])
         summary = inspect_dataset(config, self.audit)
         self.assertEqual(summary["accepted"], {"train": 1, "validation": 0, "test": 1})
         sources = json.loads((self.audit / "metadata_sources.json").read_text())
@@ -328,7 +328,7 @@ class WindowTests(unittest.TestCase):
         repo = self.root / "repo"
         config_path = prepare.REPO_ROOT / "configs/data/realcam_windows.yaml"
         args = ["--config", str(config_path), "--manifest", str(manifest), "--workspace-root", str(self.root / "workspace"),
-                "--set", "windows.height=16", "--set", "windows.width=24", "--export-count", "1", "--run-name", "smoke"]
+                "--set", "paths.data_root=public_data/RealCam-Vid", "--set", "windows.height=16", "--set", "windows.width=24", "--export-count", "1", "--run-name", "smoke"]
         with patch.object(prepare, "REPO_ROOT", repo):
             self.assertEqual(prepare.main(args), 0)
             with self.assertRaises(FileExistsError):
@@ -356,7 +356,7 @@ class WindowTests(unittest.TestCase):
         repo = self.root / "repo"
         config_path = prepare.REPO_ROOT / "configs/data/realcam_windows.yaml"
         args = ["--config", str(config_path), "--manifest", str(manifest), "--workspace-root", str(self.root / "workspace"),
-                "--limit", "1", "--export-count", "0", "--run-name", "no-window"]
+                "--set", "paths.data_root=public_data/RealCam-Vid", "--limit", "1", "--export-count", "0", "--run-name", "no-window"]
         with patch.object(prepare, "REPO_ROOT", repo):
             self.assertEqual(prepare.main(args), 2)
         folder = repo / "output/no-window"

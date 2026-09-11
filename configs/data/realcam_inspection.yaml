@@ -1,7 +1,7 @@
 # CPU-only metadata / video audit. Does not load models or sample windows.
 paths:
   workspace_root: null
-  data_root: public_data/RealCam-Vid  # workspace-relative
+  data_root: public_data/RealCam-Vid/RealEstate10K  # workspace-relative
 seed: 0
 data:
   subset: RealEstate10K

@@ -25,7 +25,7 @@ class NextCommandTests(unittest.TestCase):
         repo = Path(fixture.temp.name) / "repo"
         args = ["--config", str(REPO_ROOT / "configs/data/realcam_inspection.yaml"),
                 "--workspace-root", str(fixture.root.parents[1]), "--probe-mode", "metadata",
-                "--set", "data.validation_fraction=0", "--set", "data.group_by=source_id",
+                "--set", "paths.data_root=public_data/RealCam-Vid", "--set", "data.validation_fraction=0", "--set", "data.group_by=source_id",
                 "--run-name", "realestate10k_audit_smoke_v2"]
         console = io.StringIO()
         with patch.object(inspect_realcam, "REPO_ROOT", repo), redirect_stdout(console):
@@ -54,7 +54,7 @@ class NextCommandTests(unittest.TestCase):
         manifest = fixture.make_manifest([("source", relative)])
         repo = fixture.root / "repo"
         args = ["--config", str(REPO_ROOT / "configs/data/realcam_windows.yaml"), "--manifest", str(manifest),
-                "--workspace-root", str(fixture.root / "workspace"), "--set", "windows.height=16",
+                "--workspace-root", str(fixture.root / "workspace"), "--set", "paths.data_root=public_data/RealCam-Vid", "--set", "windows.height=16",
                 "--set", "windows.width=24", "--export-count", "0", "--run-name", "windows_index"]
         with patch.object(prepare, "REPO_ROOT", repo), redirect_stdout(io.StringIO()):
             self.assertEqual(prepare.main(args), 0)

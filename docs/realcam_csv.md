@@ -2,18 +2,22 @@
 
 本阶段读取 RealCam-Vid 的 train/test CSV，筛选 RealEstate10K，检查视频与相机标注，生成可迁移的样本清单。原视频和元数据不改写；不加载 LongLive、不开启训练。第 4 阶段通过 `prepare_realcam_windows.py` 实现 24 FPS / 125 RGB 连续窗口、首帧提取和几何同步。
 
-用户最新确认 train/test 表直接位于 `workspace/public_data/RealCam-Vid`，分别为 `RealEstate10K_train.csv`、`RealEstate10K_test.csv`，包含 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均使用 `dataset_source=RealEstate10K`；读取器仅将 `data_source` 保留为兼容别名。上一级视频目录只作为相似场景分组，不能视为已验证的原始视频 ID。
+当前数据根目录为 `workspace/public_data/RealCam-Vid/RealEstate10K`。用户手动整理 train/test CSV 并将 video_path 改为 `train/<目录>/<视频>.mp4` 或 `test/<目录>/<视频>.mp4`；代码不修改 CSV。字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均使用 `dataset_source=RealEstate10K`；`data_source` 仅为兼容别名。上一级视频目录只作为相似场景分组，不视为已验证的原始视频 ID。
 
 ```text
 workspace/public_data/RealCam-Vid/
-  RealEstate10K_train.csv
-  RealEstate10K_test.csv
+  RealCam-Vid_train.npz
+  RealCam-Vid_test.npz
   RealEstate10K/
+    RealEstate10K_train.csv
+    RealEstate10K_test.csv
+    RealEstate10K_train.npz  # 新 3A 按 CSV 重建后，由用户移动至此
+    RealEstate10K_test.npz
     train/<sub_dir>/<video_name>.mp4
     test/<sub_dir>/<video_name>.mp4
 ```
 
-例如 `video_path=RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4`，只拼接一次数据根目录，得到 `workspace/public_data/RealCam-Vid/RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4`。文本读取同一行的 `long_caption`，CSV 中非空 `align_factor` 优先于 NPZ。相机内外参仍来自独立 NPZ；上述七列和 MP4 不包含可直接读取的相机轨迹。
+例如 `video_path=train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4`，拼接数据根目录得到 `workspace/public_data/RealCam-Vid/RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4`。支持 `./train/...`、Windows 分隔符及位于数据根目录内的绝对路径；相对路径更适合迁移。文本读取同一行的 long_caption，CSV 中非空 align_factor 优先于 NPZ。
 
 本地示例 `E:/codexspace/RealCam-Vid_test.npz` 已实际读取：5,000 条记录，其中 RealEstate10K 为 2,152 条；无原始视频 ID 字段。部分 test 元数据指向 `RealEstate10K/train/...`，因此**集合划分以输入 CSV 为准，不由视频路径中的 train/test 决定**。真实 CSV 和视频尚未在本机验收。
 
@@ -31,7 +35,7 @@ workspace/public_data/RealCam-Vid/
 python -m pip install numpy omegaconf av==13.1.0
 ```
 
-默认配置为 `configs/data/realcam_inspection.yaml`。标准目录仍为 `workspace/project/StreamAdapter` 和 `workspace/public_data/RealCam-Vid`，无需设置环境变量。
+默认配置为 `configs/data/realcam_inspection.yaml`。仓库位于 `workspace/project/StreamAdapter`，数据位于 `workspace/public_data/RealCam-Vid/RealEstate10K`，无需设置环境变量。
 
 ```bash
 # 每个原始 split 最多检查 10 条目标数据的视频和相机；全部行仍检查来源 ID
@@ -43,8 +47,8 @@ python inspect_realcam.py --tag full-decode
 # 明确 CSV 相对数据根目录的位置
 python inspect_realcam.py --set data.train_csv=metadata/train.csv --set data.test_csv=metadata/test.csv --tag explicit-csv
 
-# 相机参数来自官方 NPZ（以下文件名以官方发布为例，按本地实际文件覆盖）
-python inspect_realcam.py --set data.train_camera_npz=RealCam-Vid_train.npz --set data.test_camera_npz=RealCam-Vid_test.npz --limit 10 --tag npz-smoke
+# 明确使用按 CSV 重建、已移动到数据根目录的 NPZ
+python inspect_realcam.py --set data.train_camera_npz=RealEstate10K_train.npz --set data.test_camera_npz=RealEstate10K_test.npz --limit 10 --tag npz-smoke
 
 # 仅检查元数据和文件存在性，不验证视频可解码
 python inspect_realcam.py --probe-mode metadata --limit 10 --tag metadata-smoke
@@ -62,9 +66,9 @@ CSV 没有相机列时，优先选择数据根目录下的 `RealEstate10K_<split
 python extract_realestate10k.py --inspect-only
 ```
 
-此模式默认只加载数据根目录中的 `RealCam-Vid_test.npz`，打印前 3 条记录的路径/数组形状，以及全表数据来源、路径前缀统计。保留原文件所有子集、字段、顺序、路径和数组数值，不读取 CSV 或视频，也不修改 NPZ。
+此模式默认只加载 `--source-root`（默认 `workspace/public_data/RealCam-Vid`）中的 `RealCam-Vid_test.npz`，打印前 3 条记录的路径/数组形状，以及全表数据来源、路径前缀统计。保留原文件所有子集、字段、顺序、路径和数组数值，不读取 CSV 或视频，也不修改 NPZ。
 
-可用 `--test-npz <文件路径>` 覆盖输入；相对路径基于数据根目录。`--preview-count 10` 控制终端摘要和展开预览的条数，不限制完整导出的记录数量。查看两份归档可加 `--splits train test`。路径配置方式与原提取命令相同。
+可用 `--test-npz <文件路径>` 覆盖输入；相对路径基于 source-root。`--preview-count 10` 控制终端摘要和展开预览的条数，不限制完整导出的记录数量。查看两份归档可加 `--splits train test`。
 
 结果位于 `output/metadata_readable_test_<时间>_<tag>/`（未设置 tag 时省略该后缀），其中 `test/` 包含：
 
@@ -75,7 +79,7 @@ python extract_realestate10k.py --inspect-only
 | preview.json | 前若干条完整记录，缩进展开，适合在编辑器中人工查看相机矩阵 |
 | records.jsonl | 所有记录的全部字段和数组数值，每行一条，无省略号截断；文件可能较大 |
 
-数组表示为 `{"__ndarray__": true, "dtype": "float64", "shape": [F,4,4], "values": [...]}`；特殊 NaN/Infinity 使用显式标记对象，保证标准 JSON 可读。此格式用于人工查看，不替代原 NPZ。输出根目录保留 extraction.txt、parameters.json、launch.json、summary.json、status.json；`status=completed` 表示导出完成，不表示第三步的数据检查通过。原有不带 `--inspect-only` 的子集提取行为不变。
+数组表示为 `{"__ndarray__": true, "dtype": "float64", "shape": [F,4,4], "values": [...]}`；特殊 NaN/Infinity 使用显式标记对象，保证标准 JSON 可读。此格式用于人工查看，不替代原 NPZ。输出根目录保留 extraction.txt、parameters.json、launch.json、summary.json、status.json；`status=completed` 表示导出完成，不表示第三步的数据检查通过。
 
 ### 临时匹配诊断
 
@@ -97,20 +101,23 @@ python diagnose_realcam_temp.py --audit-dir output/realestate10k_audit_smoke_v2 
 
 ### 分离子集 NPZ
 
-脚本 `extract_realestate10k.py` 可将两份总 NPZ 分离为 RealEstate10K 专用 NPZ。它只依据 `dataset_source=RealEstate10K` 筛选，不根据视频路径里的 train/test 重新划分，也不依据 CSV 删行；每条记录的全部字段、数组 dtype/形状/内容和相对顺序保持不变。
+`extract_realestate10k.py` 默认 `--split-policy csv`：读取两份原始 NPZ，按用户已整理的 CSV 样本与顺序重建对应 train/test NPZ。原始归档名和视频路径中的 train/test 都不决定新集合归属。相机只按完整路径精确关联，原始 NPZ 路径仅移除 RealEstate10K/ 前缀；CSV 不改写。
 
 在标准服务器目录中运行：
 
 ```bash
-python extract_realestate10k.py --run-name realestate10k_metadata_v1
+python extract_realestate10k.py --run-name realestate10k_csv_aligned_v1
 ```
 
 默认读取 `workspace/public_data/RealCam-Vid/RealCam-Vid_train.npz` 和 `RealCam-Vid_test.npz`，在仓库生成：
 
 ```text
-output/realestate10k_metadata_v1/
+output/realestate10k_csv_aligned_v1/
   RealEstate10K_train.npz
   RealEstate10K_test.npz
+  partition_report.json
+  train_provenance.json
+  test_provenance.json
   extraction.txt
   parameters.json
   launch.json
@@ -118,23 +125,29 @@ output/realestate10k_metadata_v1/
   status.json
 ```
 
-原文件不覆盖；已存在的结果目录也不覆盖。再次提取应换一个 `--run-name`，或使用 `--tag` 生成包含时间的唯一目录。每个 split 顺序处理，保存后重新加载，逐字段核对；摘要记录输入/选中/排除数量及输入输出 SHA256。正常完成时 `status=completed`、各 split 的 `roundtrip_verified=true`。缺失来源字段、零匹配、缺失文件或校验失败均返回非零退出码。
+检查 CSV 的来源字段、短路径格式、重复路径及跨集合重复。两份源 NPZ 中同一路径的元数据若在路径规范化后全部一致则合并并记录两份来源；其余任何字段差异（含数组 dtype/形状/数值）均视为冲突。缺失匹配或冲突时返回非零，并在 partition_report.json 记录原因，此时不生成子集 NPZ。
+
+成功后重新加载每份输出，逐字段验证，并检查路径集合和顺序与对应 CSV 完全一致。所有相机数组保留原始可变长度，不补齐、不截断；除 video_path 外原字段不变。provenance 文件记录每条 CSV 行对应的源 NPZ。原文件及已有输出目录不覆盖；重复执行使用新 --run-name 或 --tag。
+
+原始 NPZ 逐份加载；命中的记录暂存于磁盘 SQLite，避免同时保留两份大归档的数组，结束时删除临时数据库。每份源/输出 NPZ 仍需完整解压，需预留内存与磁盘空间。此步不解码视频、不验证相机几何，成功后仍运行第三步。
 
 随后直接让检查器读取输出目录中的 NPZ，无需复制到原数据目录：
 
 ```bash
-python inspect_realcam.py --camera-metadata-dir output/realestate10k_metadata_v1 --limit 10 --tag subset-smoke
+python inspect_realcam.py --camera-metadata-dir output/realestate10k_csv_aligned_v1 --limit 10 --tag subset-smoke
 ```
 
 `--camera-metadata-dir` 相对仓库根目录解析，也接受绝对路径；此参数会覆盖两个 `data.*_camera_npz` 设置，并要求所选文件存在，不静默回退总 NPZ。CSV 和视频仍从原数据根目录读取。全量检查时移除 `--limit 10`。
 
-仅验证本地已有 test 文件可以运行：
+用户将两份新 NPZ 移动到 RealEstate10K 文件夹后，可直接运行 `python inspect_realcam.py --limit 10 --tag relocated-smoke`。请保留输出目录中的参数与来源报告。第 3A 步不会移动或修改 CSV。
+
+保留的旧模式仅按原归档筛选，不对齐 CSV，也不缩短路径（用于对照，不适用于新默认目录）：
 
 ```bash
-python extract_realestate10k.py --splits test --test-npz "E:/codexspace/RealCam-Vid_test.npz" --tag local-test
+python extract_realestate10k.py --split-policy archive --splits test --test-npz "E:/codexspace/RealCam-Vid_test.npz" --tag legacy-test
 ```
 
-`--train-npz` / `--test-npz` 相对数据根目录解析，也接受绝对路径。只提取 test 的结果目录不能直接用于同时检查 train/test；服务器正常流程应提取两份。首次分离仍要将当前 split 的总 NPZ 解压至内存，但后续检查只加载子集 NPZ。分离过程不读取视频，也不替代第 3 步的视频/相机有效性检查。
+`--source-root` 和 `--data-root` 均相对 workspace；前者默认 public_data/RealCam-Vid，后者默认 public_data/RealCam-Vid/RealEstate10K。`--train-npz` / `--test-npz` 相对 source-root，`--train-csv` / `--test-csv` 相对 data-root，均可用绝对路径覆盖。新模式即使只指定 `--splits test`，也会读取两份源 NPZ；默认生成两份输出并检查 CSV 间重复。成功后打印使用本次输出的第三步命令。旧索引绑定旧 CSV 哈希，修改/迁移后必须重建第三、四步输出。
 
 ## 字段约定
 
@@ -159,7 +172,7 @@ python extract_realestate10k.py --splits test --test-npz "E:/codexspace/RealCam-
 | num_frames | num_frames / frame_count / video_frames | 可选，正整数；与实际视频及相机长度对照 |
 | width / height | width / video_width；height / video_height | 可选，正整数；与实际视频对照 |
 
-没有 subset 列且路径不带子集名时，只有确认整份 CSV 均为 RealEstate10K 后，才设 `data.assume_subset=RealEstate10K`。默认 `data.group_by=source_or_directory`：有明确来源 ID 时按来源分组，否则按已确认的 `<子集>/<原始split>/<目录>/<视频>` 布局提取目录分组。后者记录 `group_basis=parent_directory`、空 `source_id`，并将 `original_source_leakage_check_complete` 标为 false；不声称已排除所有原视频层面的泄漏。
+第三步没有 subset 列且路径不带子集名时，只有确认整份 CSV 均为 RealEstate10K 后，才设 `data.assume_subset=RealEstate10K`；新第 3A 步要求 CSV 显式提供来源字段。默认 `data.group_by=source_or_directory`：有明确来源 ID 时按来源分组，否则支持 `<原始split>/<目录>/<视频>`，并兼容显式旧根目录下的 `<子集>/<原始split>/<目录>/<视频>`。后者记录 `group_basis=parent_directory`、空 source_id，原视频级泄漏检查仍标为未完成。
 
 若后续取得可靠的原始视频 ID，可以映射列或设置 `data.source_id_regex`（推荐捕获组 `(?P<source_id>...)`，否则取第一个组）。设置 `data.group_by=source_id` 可要求所有样本必须有明确来源 ID，缺失时剔除。
 

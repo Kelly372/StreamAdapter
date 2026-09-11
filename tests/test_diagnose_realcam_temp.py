@@ -50,7 +50,7 @@ class DiagnosticTests(unittest.TestCase):
         np.savez_compressed(path, arr_0=np.array(payload, dtype=object))
 
     def run_diagnostic(self, extra=(), include_config=True):
-        args = (["--config", self.config] if include_config else []) + ["--workspace-root", str(self.workspace), *extra]
+        args = (["--config", self.config] if include_config else []) + ["--workspace-root", str(self.workspace), "--set", "paths.data_root=public_data/RealCam-Vid", *extra]
         console = io.StringIO()
         with patch.object(diagnostic, "REPO_ROOT", self.repo), patch.object(diagnostic, "environment_record", return_value={}), \
                 redirect_stdout(console), redirect_stderr(console):
@@ -91,7 +91,7 @@ class DiagnosticTests(unittest.TestCase):
     def test_previous_rejections_prioritized_and_actual_selected_archive_used(self):
         audit = self.repo / "output/old-audit"
         audit.mkdir(parents=True)
-        config = load_inspection_config(self.config, str(self.workspace))
+        config = load_inspection_config(self.config, str(self.workspace), ["paths.data_root=public_data/RealCam-Vid"])
         OmegaConf.save(config, audit / "resolved_config.yaml")
         selected = self.data / "previous-selected.npz"
         self.save_npz(selected, self.inputs["test"][:2])

@@ -1,7 +1,7 @@
 # Step 4: CPU window preparation and sample export; no model/adapter training.
 paths:
   workspace_root: null
-  data_root: public_data/RealCam-Vid
+  data_root: public_data/RealCam-Vid/RealEstate10K
 seed: 0
 windows:
   rgb_frames: 125

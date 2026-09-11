@@ -7,8 +7,8 @@
 - **项目目标固定为 I2V：首帧图像＋文本＋相机轨迹 → 受控视频。基础复现也默认 I2V；T2V 仅作可选对照。**
 
 - 目标目录：`workspace/project/StreamAdapter`。当前本地检出的目录名可以不同。
-- 数据：`workspace/public_data/RealCam-Vid` 中的 RealEstate10K；元数据为 train/test CSV。
-- 最新确认 train/test 表直接位于数据根目录，字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均为 `dataset_source=RealEstate10K`；`data_source` 仅保留为兼容别名。视频路径形如 `RealEstate10K/train/<目录>/<视频>.mp4`，相对 `workspace/public_data/RealCam-Vid`；相机参数仍来自独立的总表或第 3A 步子集 NPZ。上一级目录为相似场景分组，不标记为已验证的原始视频 ID。
+- 数据根目录（2026-09-11 更新）：`workspace/public_data/RealCam-Vid/RealEstate10K`；原始总 NPZ 保留在其父目录 `RealCam-Vid`。
+- 用户手动整理 CSV 并将 video_path 改为 `train/<目录>/<视频>.mp4`、`test/<目录>/<视频>.mp4`；CSV 和新子集 NPZ 放在上述数据根目录。字段为 `dataset_source, video_path, short_caption, long_caption, align_factor, camera_scale, vtss_score`。CSV 和官方 NPZ 均为 dataset_source=RealEstate10K，data_source 仅兼容。第 3A 步以 CSV 集合归属及顺序为准，从两份原始 NPZ 查询并重建对应 NPZ；不依据归档名或视频路径目录重新划分 CSV。上级视频目录仍只作为相似场景分组，不标记为原始视频 ID。
 - Wan2.2 基础组件：`workspace/pretrained_model/Wan2.2-TI2V-5B`。
 - LongLive 蒸馏权重：`workspace/pretrained_model/LongLive` 下的 `LongLive-2.0-5B`、`LongLive-2.0-5B-NVFPS-S4`、`LongLive-2.0-5B-NVFPS-S2`。
 - `NVFPS` 是用户提供的本地目录拼写，数值格式仍为 NVFP4；实际目录若为 `NVFP4`，使用配置/命令行覆盖。
@@ -18,16 +18,20 @@
 - 数据目录：
     Workspace/public_data
         - RealCam-Vid
-            - RealEstate10K_train.csv
-            - RealEstate10K_test.csv
+            - RealCam-Vid_train.npz
+            - RealCam-Vid_test.npz
             - RealEstate10K
+                - RealEstate10K_train.csv
+                - RealEstate10K_test.csv
+                - RealEstate10K_train.npz
+                - RealEstate10K_test.npz
                 - test
                     - sub_dir/video_name.mp4
                 - train
                     - sub_dir/video_name.mp4
 - csv文件示例：
 dataset_source,video_path,short_caption,long_caption,align_factor,camera_scale,vtss_score
-RealEstate10K,RealEstate10K/train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4,"...","...",3.67878591096826,1.5096761946889783,0.06628306
+RealEstate10K,train/ZPLUfZsgEtg/f3fa5c1e24a522bc.mp4,"...","...",3.67878591096826,1.5096761946889783,0.06628306
 
 ## 已确定的首轮方案 A
 
@@ -87,6 +91,8 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 文件：`inspect_realcam.py`、`utils/realcam_dataset.py`、`utils/realcam_inspection.py`、`configs/data/realcam_inspection.yaml`、`docs/realcam_csv.md`。
 
 #### 3A. 预先分离 RealEstate10K 相机 NPZ — 已实现
+
+- [x] 2026-09-11 改为默认按 CSV 划分：从两份原始 NPZ 精确查询，生成短路径的 train/test 子集 NPZ；检查 CSV 内/跨集合重复、缺失和元数据冲突，记录来源并往返核验。下列早期“保持原归档划分”的行为仅在显式 --split-policy archive 时保留。
 
 - [x] 新增 `--inspect-only` 原始 NPZ 查看模式，默认仅查看 test；不筛选子集，导出完整 JSONL、精简路径索引、展开预览与字段/来源统计，供人工核对。
 
@@ -280,3 +286,14 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 已对本地真实 `E:/codexspace/RealCam-Vid_test.npz` 执行：5,000 条全部导出，RealEstate10K 2,152、MiraData9K 1,895、DL3DV-10K 953。RealEstate10K 路径前缀 train 1,932 / test 220；该统计只描述路径，不能视为归档划分。
 - 实际结果及参数：`output/metadata_readable_test_20260911-092713-881116_local-readable/`，完整 records.jsonl 为 152,688,787 字节。验证两个 JSONL 均为 5,000 行、预览 3 条，首条外参形状为 [92,4,4]。
 - 6 项相关测试通过、无跳过，覆盖原提取流程、只读模式默认 test、全子集/全字段保留、数组 dtype/形状/数值、NaN 标记、预览数量及原文件不变；3 个相关 Python 文件语法检查通过。验证记录为上述目录 verification.txt、verification_tests.txt。GPU 和服务器真实 CSV/视频未测试。
+
+### 2026-09-11：迁移至 RealEstate10K 根目录并按 CSV 重建 NPZ
+
+- 主体默认数据根目录改为 public_data/RealCam-Vid/RealEstate10K，涵盖第三步、第四步、BF16/NVFP4 基线、实验 A 与路径默认值。分组规则接受 train/<场景>/<视频>、test/<场景>/<视频> 和 ./ 前缀，显式旧根目录仍兼容旧的 RealEstate10K/... 路径。下一步命令按新默认根目录传递配置。
+- 第 3A 步默认 --split-policy csv；--source-root 默认 public_data/RealCam-Vid，原始 NPZ 相对该目录；--data-root 默认其 RealEstate10K 子目录，CSV 相对该目录。两份源 NPZ 均用于查找所需记录，生成集合和顺序由 CSV 决定，解决已观察到的 test CSV 相机位于原 train NPZ 的问题。--inspect-only 继续只读原始 test NPZ；旧分离方式保留为显式 --split-policy archive。
+- 不修改用户 CSV。原 NPZ 路径只去掉 RealEstate10K/ 前缀并规范化分隔符，保留 train/test 目录名；输出所有其他字段及相机数组 dtype/形状/数值不变，包括可变序列长度。按同一个规范化键检查 CSV 重复及跨集合重复；两份源归档的同键记录只有全部字段一致时才合并，任何差异均报告冲突。
+- 缺失/冲突会写 partition_report.json 并失败，生成子集 NPZ 前完成这些检查；成功后重新读取，核验路径集合/顺序与 CSV 一致、全部字段往返一致。train/test_provenance.json 保存每条 CSV 行的来源归档，报告中记录全部 CSV/NPZ 哈希、参数和输入/输出统计。
+- 源归档逐份加载，命中的记录暂存于输出目录内 SQLite，结束时删除单个暂存文件；每份输出分别组装和校验，避免同时保留两份完整源数组。仍需足够内存与磁盘空间。未自动移动任何用户文件，结果仍在唯一 output 子目录。
+- 新流程：用户先整理新目录的 CSV → `python extract_realestate10k.py --run-name realestate10k_csv_aligned_v1` → 使用成功后打印的第三步命令；或用户将生成 NPZ 移入 RealEstate10K 目录，再运行 `python inspect_realcam.py --limit 10 --tag relocated-smoke`。旧 CSV 哈希和窗口索引不复用，需要重建第三、四步结果。
+- 验证：65 项 CPU 测试通过、无跳过，176 个 Python 文件语法检查通过。新增端到端验证使用来自两份原始 NPZ 的 test CSV 样本、混合 train/test 视频目录、不同相机帧数；生成文件移动后按新默认目录解码真实合成 MP4，第三步接受 train=1/test=2，第四步输出 125 帧且首帧/RGB/相机索引一致。另覆盖缺失、冲突、相同重复归并、CSV 跨集合重复、路径越界与前缀规范化。旧布局测试通过显式根目录覆盖验证兼容。
+- 参数及验证结果：`output/verification_csv_partition_20260911-095720/`。本机尚无用户修改后的真实 CSV 和完整 train NPZ，因此服务器真实划分与第三步验收仍由用户运行；本轮未做 GPU 验证。
