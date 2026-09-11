@@ -20,7 +20,7 @@ windows:
   cut_hist_threshold: 0.60
   cut_min_mean_for_hist: 0.08  # suppress histogram-bin changes from small brightness shifts
 export:
-  count: 1  # 0 = index only; each 704x1280 float32 window is approximately 1.26 GiB
+  count: 10  # 0 = index only; exported sequentially, one window per usable clip
   epoch: 0
   draw: 0
   codec: libx264

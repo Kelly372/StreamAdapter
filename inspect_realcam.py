@@ -94,7 +94,7 @@ def main(argv=None):
             print(f"Audit failed: {failure}", flush=True)
         if code == 0:
             command = ["python", "prepare_realcam_windows.py", "--manifest", f"output/{name}/train.csv",
-                       "--limit", "10", "--export-count", "2", "--run-name", next_run_name(folder, "audit", "windows")]
+                       "--limit", "50", "--export-count", "10", "--run-name", next_run_name(folder, "audit", "windows")]
             command += data_context(config, REPO_ROOT)
             for key, value, default in (("seed", config.seed, 0), ("windows.rgb_frames", config.data.rgb_frames, 125),
                                         ("windows.target_fps", config.data.target_fps, 24)):

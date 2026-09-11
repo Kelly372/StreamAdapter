@@ -8,7 +8,7 @@
 
 ```bash
 # 将 <audit_run> 替换为实际的第 3 步结果目录名
-python prepare_realcam_windows.py --manifest output/<audit_run>/train.csv --limit 10 --export-count 2 --tag train-window-smoke
+python prepare_realcam_windows.py --manifest output/<audit_run>/train.csv --limit 50 --export-count 10 --tag baseline10
 
 # 全量建立训练窗口索引，不导出预览视频
 python prepare_realcam_windows.py --manifest output/<audit_run>/train.csv --export-count 0 --tag train-window-index
@@ -19,7 +19,7 @@ python prepare_realcam_windows.py --manifest output/<audit_run>/validation.csv -
 
 `--manifest` 和 `--shot-annotations` 相对仓库根目录，`paths.data_root` 相对 workspace，默认 `public_data/RealCam-Vid/RealEstate10K`；支持 `--workspace-root`、重复 `--set KEY=VALUE`。无需手动 export 环境变量。默认配置为 `configs/data/realcam_windows.yaml`。CSV 改为短路径后应使用新第三步清单；旧结果绑定原始 CSV 哈希。
 
-`--limit 10` 检查清单前 10 条，可能全部不适合目标窗口；不代表整个数据集没有可用样本。输入应已在第 3 步完成集合和目录组重叠检查，第 4 步不重新划分集合。
+默认导出 10 个不同可用 clip，每个 clip 一个窗口，按清单顺序选择；不是同一张首帧生成 10 次，也不是随机抽取 10 个场景。`--limit 50` 检查清单前 50 条作为候选，最终可能不足 10 个可用窗口；summary.json 中 requested_exports/exported_samples/export_shortfall 和终端提示会明确数量，不重复视频凑数。若第三步清单本身不足 10 条，先用 `python inspect_realcam.py --limit 50 --tag baseline10` 扩大检查（保留原来的数据/NPZ覆盖参数），然后使用新清单；候选仍不足时再提高限制。输入应已在第 3 步完成集合和目录组重叠检查，第 4 步不重新划分集合。
 
 ## 时间与连续性规则
 

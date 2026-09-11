@@ -122,7 +122,9 @@ def main(argv=None):
         summary = {"input_samples": index["input_samples"], "inspected_samples": index["inspected_samples"],
                    "usable_clips": len(index["records"]), "feasible_windows": sum(row["feasible_windows"] for row in index["records"]),
                    "rejected_samples": len(index["rejected"]), "rejection_reasons": dict(Counter(row["reason"] for row in index["rejected"])),
-                   "exported_samples": 0, "all_manifest_samples_inspected": index["input_samples"] == index["inspected_samples"],
+                   "exported_samples": 0, "requested_exports": int(config.export.count),
+                   "export_shortfall": max(0, int(config.export.count) - len(index["records"])),
+                   "all_manifest_samples_inspected": index["input_samples"] == index["inspected_samples"],
                    "unused_annotation_keys": index["unused_annotation_keys"],
                    "shot_detection_limitation": index["shot_detection_limitation"]}
         write_json(folder / "summary.json", summary)
@@ -144,6 +146,9 @@ def main(argv=None):
             handle.write("\nResults:\n" + json.dumps(summary, indent=2))
         write_json(folder / "status.json", {"status": "completed_with_rejections" if index["rejected"] else "completed", "returncode": 0})
         print(f"Usable clips: {len(dataset)}; exported: {summary['exported_samples']}; rejected: {summary['rejected_samples']}", flush=True)
+        if summary["export_shortfall"]:
+            print(f"Requested {summary['requested_exports']} distinct clips, exported only {summary['exported_samples']}. "
+                  "Inspect more rows in stage 3 or increase --limit here; no clips were duplicated to fill the count.", flush=True)
         if summary["exported_samples"]:
             command = ["python", "run_baseline.py", "--config", "configs/baseline/longlive_bf16_i2v.yaml",
                        "--set", f"data.data_path=output/{name}/baseline_i2v", "--check-only",
@@ -158,7 +163,7 @@ def main(argv=None):
             command += data_context(config, REPO_ROOT)
             if args.shot_annotations:
                 command += ["--shot-annotations", args.shot_annotations]
-            command += ["--export-count", "2"]
+            command += ["--export-count", "10"]
         print_next_command(folder, command, REPO_ROOT)
         return 0
     except (Exception, KeyboardInterrupt) as exc:

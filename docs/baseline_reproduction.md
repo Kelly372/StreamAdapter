@@ -144,6 +144,19 @@ python run_baseline.py --config configs/baseline/longlive_bf16.yaml --tag t2v-co
 - `runtime_config.yaml`：模型管线/调度器参数与 GPU 信息（实际初始化成功后生成）。
 - `launch.json`：参数数组、代码提交和环境版本；`input_check.json`：输入检查。
 - `status.json`、`console.log`、生成的视频/提示词文件。
+- 第四步导出的图片输入自动附带同名前缀的 `_gt.mp4`（真实窗口）、`_input.png`（输入首帧）、`_sample.json`（窗口参数）、`_reference.json`（对应关系与哈希）。例如 `rank0-0-0_regular.mp4` 对照 `rank0-0-0_regular_gt.mp4`。GT 是裁剪、重采样后的有损预览，不送入模型。
+
+扩大到 10 条测试时，先用第四步 `--limit 50 --export-count 10` 从已检查清单导出 10 个不同可用片段，再依次执行其打印的检查和正式推理命令。默认 `inference_iter=-1` 处理输入目录全部图片、`num_samples=1` 每张图片生成一次；不要用 num_samples=10 代替选择 10 个片段。实际导出数量见第四步 summary.json，不足 10 条时先扩大候选清单。
+
+已有结果无需重新推理，可补齐 GT：
+
+```text
+python collect_baseline_references.py --run-dir output/实际推理结果目录
+```
+
+脚本从该次 `resolved_config.yaml` 找到原来的 `baseline_i2v`，按图片排序索引和已保存提示词核对结果，再通过第四步 `sample.json` 与首帧内容核验 GT。必须保留原输入图片集合和顺序；旧结果没有首帧哈希，因此不能恢复已经被替换的原输入。迁移后可加 `--data-path output/实际第四步目录/baseline_i2v` 指定原输入的新位置。第四步的 `samples/` 与 `baseline_i2v/` 需要保留同级关系，不必重做第三、四步。
+
+补齐操作记录在该次结果内独立的 `reference_backfill_<时间>/`，包含参数、有效配置、摘要和状态。生成视频保持不变，已有且内容相同的 GT 不重复复制，冲突文件不覆盖。普通图片输入没有 GT 时明确记录 `gt_unavailable`。补齐命令仅支持带索引名称的 I2V 图片输入结果。
 
 默认负面提示词由项目配置工具填入。更深层的管线/调度器默认值在实际创建模型后记录；dry-run 不能声称已获得 GPU 运行时信息。
 

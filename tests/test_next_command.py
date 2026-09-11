@@ -33,7 +33,7 @@ class NextCommandTests(unittest.TestCase):
         folder = repo / "output" / args[-1]
         record = json.loads((folder / "next_command.json").read_text())
         expected = ("python prepare_realcam_windows.py --manifest output/realestate10k_audit_smoke_v2/train.csv "
-                    "--limit 10 --export-count 2 --run-name realestate10k_windows_smoke_v2")
+                    "--limit 50 --export-count 10 --run-name realestate10k_windows_smoke_v2")
         self.assertTrue(record["command"].startswith(expected))
         self.assertIn(record["command"], console.getvalue())
         self.assertIn("--workspace-root", record["argv"])
@@ -67,6 +67,11 @@ class NextCommandTests(unittest.TestCase):
             first[position] = str(resolve_path(first[position], repo))
             self.assertEqual(prepare.main(first[2:]), 0)
         name = first[first.index("--run-name") + 1]
+        self.assertEqual(first[first.index("--export-count") + 1], "10")
+        summary = json.loads((repo / "output" / name / "summary.json").read_text())
+        self.assertEqual(summary["requested_exports"], 10)
+        self.assertEqual(summary["exported_samples"], 1)
+        self.assertEqual(summary["export_shortfall"], 9)
         second = json.loads((repo / "output" / name / "next_command.json").read_text())["argv"]
         self.assertEqual(second[1], "run_baseline.py")
         self.assertIn("--check-only", second)

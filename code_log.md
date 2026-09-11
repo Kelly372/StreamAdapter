@@ -297,3 +297,18 @@ Adapter 宽度/深度/注入层、阶段长度、训练预算尚未定稿。首�
 - 新流程：用户先整理新目录的 CSV → `python extract_realestate10k.py --run-name realestate10k_csv_aligned_v1` → 使用成功后打印的第三步命令；或用户将生成 NPZ 移入 RealEstate10K 目录，再运行 `python inspect_realcam.py --limit 10 --tag relocated-smoke`。旧 CSV 哈希和窗口索引不复用，需要重建第三、四步结果。
 - 验证：65 项 CPU 测试通过、无跳过，176 个 Python 文件语法检查通过。新增端到端验证使用来自两份原始 NPZ 的 test CSV 样本、混合 train/test 视频目录、不同相机帧数；生成文件移动后按新默认目录解码真实合成 MP4，第三步接受 train=1/test=2，第四步输出 125 帧且首帧/RGB/相机索引一致。另覆盖缺失、冲突、相同重复归并、CSV 跨集合重复、路径越界与前缀规范化。旧布局测试通过显式根目录覆盖验证兼容。
 - 参数及验证结果：`output/verification_csv_partition_20260911-095720/`。本机尚无用户修改后的真实 CSV 和完整 train NPZ，因此服务器真实划分与第三步验收仍由用户运行；本轮未做 GPU 验证。
+
+### 2026-09-11：基线结果保存对应 GT，支持已有结果补齐
+
+- 用户反馈约 5 秒视频仅 1–2 秒运动，且无法确定对应 GT。I2V 图片推理保存结果时自动复制第四步同一窗口的 GT、输入首帧与 sample.json，使用生成视频同名前缀 `_gt.mp4`、`_input.png`、`_sample.json`，另存 `_reference.json` 记录对应关系与 SHA256。GT 不参与生成，采样和相机条件逻辑保持现状。
+- 通过 sample.json 中 baseline_image 和导出首帧字节一致性核验，不按近似视频名猜测；兼容已经生成的第四步目录。普通图片输入记录 GT 不可用；冲突参考文件拒绝覆盖。
+- 新增 `collect_baseline_references.py --run-dir output/实际推理结果目录`，无须加载模型即可给已有带索引名称的 I2V 结果补齐 GT。默认读取实际 resolved_config.yaml，可用 --data-path 指定迁移后的原输入目录；核验原图片排序索引和已保存的单镜头提示词。旧结果缺少输入快照，要求原图片集合未变化，不声称能恢复被替换的历史输入。
+- 补齐参数、有效配置、摘要和状态保存在结果目录内独立 reference_backfill_<时间>/；生成视频不变。后续先对照 GT 判断低运动来源，再决定是否排查生成块衔接，尚未确认运动问题根因。
+- 验证：4 项 CPU 测试通过，覆盖字节一致的复制、重复执行、冲突拒绝、首帧错配拒绝、普通图片无 GT，以及迁移后按索引和保存提示词补齐。另用已有默认分辨率合成窗口实际复制 GT 并核验 SHA256；4 个相关 Python 文件语法检查和 git diff --check 通过。记录：`output/verification_baseline_reference_20260911-114445/`，含 parameters.json、verification.txt 和实际 GT/首帧副本；未运行 GPU 推理或核验服务器真实视频。
+
+### 2026-09-11：扩大基线测试至 10 个视频片段
+
+- 第四步默认 export.count 从 1 改为 10；第三步成功后的建议命令从检查 10 条、导出 2 条调整为检查最多 50 条、导出 10 条；仅索引后的建议导出数量同步为 10。命令行仍可覆盖数量，每个不同可用 clip 导出一个窗口，沿用清单顺序，不做重复凑数或随机场景抽样。
+- summary.json 新增 requested_exports、export_shortfall；可用片段不足请求数量时终端明确提示扩大第三步清单或第四步候选上限。已有清单若只检查了 10 条，划分验证集后训练清单可能不足 10 条，需要先扩大第三步检查。
+- 基线默认 inference_iter=-1、num_samples=1，处理全部导出的图片，每张生成一次并按前项保存对应 GT，无须改变采样参数。结果和建议命令仍使用新的独立运行目录。
+- 验证：4 项下一步命令 CPU 测试通过，覆盖 10 条导出建议、候选仅 1 条时明确记录短缺 9 条以及后续检查命令衔接；3 个相关 Python 文件语法检查、默认 YAML 数量和 git diff --check 通过。参数及记录：`output/verification_baseline10_20260911-114927/`；未运行服务器 10 条视频的 GPU 推理。

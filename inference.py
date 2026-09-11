@@ -38,6 +38,7 @@ import torch
 from omegaconf import OmegaConf
 from tqdm import tqdm
 from torchvision.io import write_video
+from utils.baseline_reference import copy_reference
 from einops import rearrange
 import torch.distributed as dist
 from torch.utils.data import DataLoader, SequentialSampler
@@ -696,6 +697,10 @@ for i, batch_data in tqdm(enumerate(dataloader), disable=(local_rank != 0)):
                 prompt_txt_path,
                 is_main_process=(rank == 0),
             )
+            if isinstance(dataset, ImagePromptDataset):
+                reference = copy_reference(dataset.images[idx], config.output_folder, base_name)
+                print(f"[reference] {base_name}: "
+                      f"{reference['files'].get('ground_truth', 'GT unavailable (image-only input)')}", flush=True)
 
     if config.inference_iter != -1 and i >= config.inference_iter:
         break
